@@ -39,3 +39,7 @@ path = "examples/distributed_network.rs"
 [[example]]
 name = "secure_distributed_network"
 path = "examples/secure_distributed_network.rs"
+
+[[example]]
+name = "simple_neural_network"
+path = "examples/simple_neural_network.rs"

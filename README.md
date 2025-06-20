@@ -573,6 +573,9 @@ Run the examples to see the neural network in action:
 # Main demo with flexible architectures and logic problems
 cargo run
 
+# Simple neural network demo
+cargo run --example simple_neural_network
+
 # Simple XOR example
 cargo run --example simple_example
 
