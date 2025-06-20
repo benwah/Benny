@@ -20,3 +20,12 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Generated model files and training data
+*.bin
+trained_*.json
+my_network.*
+online_model.*
+
+# Example data directory (optional - remove this line if you want to track example data)
+example_data/
