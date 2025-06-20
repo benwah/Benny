@@ -1,0 +1,49 @@
+# Dockerfile specifically for Neural Network Server daemon
+FROM rust:1.87-slim as builder
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy all source files and build
+COPY . .
+RUN cargo build --release
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy binary
+COPY --from=builder /app/target/release/neural_network /usr/local/bin/
+
+# Create neural user
+RUN useradd -r -s /bin/false neural
+
+# Create directories
+RUN mkdir -p /app/config /app/data /app/logs && \
+    chown -R neural:neural /app
+
+USER neural
+WORKDIR /app
+
+# Default neural network server port
+EXPOSE 8080
+
+# Environment variables for configuration
+ENV NEURAL_NODE_NAME=neural-server
+ENV NEURAL_HOST=0.0.0.0
+ENV NEURAL_PORT=8080
+ENV NEURAL_LAYERS="4,8,4,1"
+ENV NEURAL_LEARNING_RATE=0.01
+ENV NEURAL_HEBBIAN_MODE=Classic
+
+# Default command runs the neural network server
+CMD ["sh", "-c", "neural_network server --name $NEURAL_NODE_NAME --host $NEURAL_HOST --port $NEURAL_PORT --layers $NEURAL_LAYERS --learning-rate $NEURAL_LEARNING_RATE --hebbian-mode $NEURAL_HEBBIAN_MODE"]
