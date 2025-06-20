@@ -1,0 +1,23 @@
+architecture = [
+    2,
+    4,
+    1,
+]
+learning_rate = 0.1
+hebbian_mode = "Classic"
+hebbian_rate = 0.05
+anti_hebbian_rate = 0.0
+decay_rate = 0.005
+homeostatic_rate = 0.005
+target_activity = 0.2
+history_size = 20
+use_backprop = false
+backprop_rate = 0.0
+online_learning = true
+
+[training]
+batch_size = 32
+print_interval = 100
+early_stop_threshold = 0.001
+early_stop_patience = 50
+validation_split = 0.2
