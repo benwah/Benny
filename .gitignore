@@ -20,3 +20,14 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Generated model files
+*.bin
+*.json
+*.toml
+*.csv
+
+# Neural network training data
+*_model.*
+*_network.*
+trained_*
