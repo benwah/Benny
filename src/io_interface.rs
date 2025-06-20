@@ -201,6 +201,7 @@ impl InputNode {
 #[derive(Clone)]
 pub struct OutputNode {
     distributed_network: DistributedNetwork,
+    #[allow(dead_code)]
     config: IoNodeConfig,
     is_running: bool,
 }
@@ -326,12 +327,18 @@ impl OutputNode {
     }
 }
 
+/// Type alias for custom source handler
+pub type CustomSourceHandler = fn(mpsc::Sender<Vec<f64>>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), IoError>> + Send>>;
+
+/// Type alias for custom sink handler  
+pub type CustomSinkHandler = fn(mpsc::Receiver<Vec<f64>>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), IoError>> + Send>>;
+
 /// Configuration for external data sources
 #[derive(Debug, Clone)]
 pub enum ExternalSourceConfig {
     TcpSocket { address: String, port: u16 },
     HttpEndpoint { url: String, poll_interval: u64 },
-    Custom { handler: fn(mpsc::Sender<Vec<f64>>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), IoError>> + Send>> },
+    Custom { handler: CustomSourceHandler },
 }
 
 /// Configuration for external data sinks
@@ -339,7 +346,7 @@ pub enum ExternalSourceConfig {
 pub enum ExternalSinkConfig {
     TcpSocket { address: String, port: u16 },
     HttpEndpoint { url: String },
-    Custom { handler: fn(mpsc::Receiver<Vec<f64>>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), IoError>> + Send>> },
+    Custom { handler: CustomSinkHandler },
 }
 
 /// Secure I/O nodes using TLS encryption

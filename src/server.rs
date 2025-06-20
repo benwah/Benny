@@ -206,7 +206,7 @@ pub async fn run_daemon(
     
     // Create and start the server
     let server = NetworkServer::new(network, config)
-        .map_err(|_| ProtocolError::IoError(std::io::Error::new(std::io::ErrorKind::Other, "Failed to create server")))?;
+        .map_err(|_| ProtocolError::IoError(std::io::Error::other("Failed to create server")))?;
     server.start().await?;
     
     Ok(())

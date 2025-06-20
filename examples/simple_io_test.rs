@@ -1,9 +1,8 @@
 use neural_network::{
     InputNode, OutputNode,
-    IoNodeConfig, ExternalSourceConfig, ExternalSinkConfig,
+    IoNodeConfig, ExternalSinkConfig,
 };
 use uuid::Uuid;
-use tokio::sync::mpsc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

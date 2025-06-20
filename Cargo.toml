@@ -65,6 +65,4 @@ path = "examples/online_learning.rs"
 name = "network_serialization"
 path = "examples/network_serialization.rs"
 
-[[example]]
-name = "io_interface_example"
-path = "examples/io_interface_example.rs"
+
