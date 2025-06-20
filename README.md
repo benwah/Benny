@@ -4,6 +4,11 @@ A basic implementation of a feedforward neural network written in Rust from scra
 
 ## Features
 
+- **Multi-Core Optimization**: Utilizes all CPU cores for parallel processing
+  - Parallel forward propagation across neurons within layers
+  - Parallel backpropagation for error calculation and weight updates
+  - Batch processing for training multiple samples simultaneously
+  - Optimized matrix operations using Rayon for maximum performance
 - **Flexible Architecture**: Support for any number of layers and neurons per layer
 - **Network Composition**: Connect multiple neural networks together in complex architectures
 - **Hebbian Learning**: Biologically-inspired "neurons that fire together, wire together" learning
@@ -149,6 +154,66 @@ NeuralNetwork::with_layers(layer_sizes: &[usize], learning_rate: f64)
 - `num_layers(&self) -> usize`: Get total number of layers
 - `num_hidden_layers(&self) -> usize`: Get number of hidden layers
 - `num_parameters(&self) -> usize`: Get total number of parameters (weights + biases)
+
+### Parallel Processing Methods
+
+- `train_batch(&mut self, batch: &[(Vec<f64>, Vec<f64>)]) -> f64`: Train on multiple samples in parallel
+- `forward_batch(&self, inputs_batch: &[Vec<f64>]) -> Vec<Vec<f64>>`: Process multiple inputs in parallel
+
+## Multi-Core Performance
+
+This neural network implementation is optimized for multi-core systems using the Rayon library for parallel processing.
+
+### Performance Features
+
+- **Parallel Forward Propagation**: Neuron computations within each layer are distributed across CPU cores
+- **Parallel Backpropagation**: Error calculations and weight updates utilize all available cores
+- **Batch Processing**: Multiple training samples can be processed simultaneously
+- **Optimized Matrix Operations**: Inner products and vector operations use parallel iterators
+
+### Performance Examples
+
+```rust
+use neural_network::NeuralNetwork;
+
+// Create a large network that benefits from parallelization
+let mut nn = NeuralNetwork::with_layers(&[100, 200, 150, 100, 50], 0.01);
+
+// Batch training (processes samples in parallel)
+let training_batch = vec![
+    (vec![/* 100 inputs */], vec![/* 50 targets */]),
+    (vec![/* 100 inputs */], vec![/* 50 targets */]),
+    // ... more samples
+];
+let batch_error = nn.train_batch(&training_batch);
+
+// Batch forward propagation
+let input_batch = vec![
+    vec![/* 100 inputs */],
+    vec![/* 100 inputs */],
+    // ... more inputs
+];
+let outputs = nn.forward_batch(&input_batch);
+```
+
+### Performance Tips
+
+- **Use wider networks**: Networks with more neurons per layer benefit most from parallelization
+- **Batch processing**: Train multiple samples together for better CPU utilization
+- **Large networks**: Bigger networks see greater speedup from parallel processing
+- **Multi-core systems**: Performance scales with the number of available CPU cores
+
+### Benchmarking
+
+Run the performance benchmarks to see the multi-core optimizations in action:
+
+```bash
+# Comprehensive performance demo
+cargo run --example multi_core_performance
+
+# Detailed benchmarks
+cargo run --example benchmark_parallel
+```
 
 ## Hebbian Learning
 
