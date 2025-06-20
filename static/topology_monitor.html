@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Network Topology Monitor</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+        
+        .topology-view {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .nodes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .node-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .node-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .node-name {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .status-online {
+            background: #4CAF50;
+            box-shadow: 0 0 10px #4CAF50;
+        }
+        
+        .status-offline {
+            background: #f44336;
+            box-shadow: 0 0 10px #f44336;
+        }
+        
+        .node-details {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        .node-details div {
+            margin-bottom: 5px;
+        }
+        
+        .refresh-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            color: white;
+            font-size: 1.5em;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .refresh-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+        }
+        
+        .error {
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid rgba(244, 67, 54, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .pulsing {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 Neural Network Topology Monitor</h1>
+            <p>Real-time monitoring of distributed neural network nodes</p>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="total-nodes">-</div>
+                <div class="stat-label">Total Nodes</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="online-nodes">-</div>
+                <div class="stat-label">Online Nodes</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="total-messages">-</div>
+                <div class="stat-label">Total Messages</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="uptime">-</div>
+                <div class="stat-label">Uptime</div>
+            </div>
+        </div>
+        
+        <div class="topology-view">
+            <h2>🌐 Network Topology</h2>
+            <div id="topology-content" class="loading">
+                <div class="pulsing">Loading topology data...</div>
+            </div>
+        </div>
+        
+        <div class="nodes-grid" id="nodes-grid">
+            <!-- Nodes will be populated here -->
+        </div>
+    </div>
+    
+    <button class="refresh-btn" onclick="refreshData()" title="Refresh Data">
+        🔄
+    </button>
+    
+    <script>
+        let refreshInterval;
+        
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/status');
+                if (!response.ok) throw new Error('Network response was not ok');
+                return await response.json();
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                showError('Failed to fetch topology data');
+                return null;
+            }
+        }
+        
+        function updateStats(data) {
+            const totalNodes = Object.keys(data.nodes).length;
+            const onlineNodes = Object.values(data.nodes).filter(node => node.status === 'online').length;
+            
+            document.getElementById('total-nodes').textContent = totalNodes;
+            document.getElementById('online-nodes').textContent = onlineNodes;
+            document.getElementById('total-messages').textContent = data.total_messages.toLocaleString();
+            document.getElementById('uptime').textContent = formatUptime(data.uptime);
+        }
+        
+        function updateNodes(data) {
+            const nodesGrid = document.getElementById('nodes-grid');
+            nodesGrid.innerHTML = '';
+            
+            Object.values(data.nodes).forEach(node => {
+                const nodeCard = createNodeCard(node);
+                nodesGrid.appendChild(nodeCard);
+            });
+        }
+        
+        function createNodeCard(node) {
+            const card = document.createElement('div');
+            card.className = 'node-card';
+            
+            const statusClass = node.status === 'online' ? 'status-online' : 'status-offline';
+            
+            card.innerHTML = `
+                <div class="node-header">
+                    <div class="node-name">${node.name}</div>
+                    <div class="status-indicator ${statusClass}"></div>
+                </div>
+                <div class="node-details">
+                    <div><strong>Address:</strong> ${node.address}</div>
+                    <div><strong>Status:</strong> ${node.status}</div>
+                    <div><strong>Last Seen:</strong> ${node.last_seen}</div>
+                    <div><strong>Messages:</strong> ${node.message_count.toLocaleString()}</div>
+                    <div><strong>Errors:</strong> ${node.error_count}</div>
+                </div>
+            `;
+            
+            return card;
+        }
+        
+        function updateTopology(data) {
+            const topologyContent = document.getElementById('topology-content');
+            
+            if (Object.keys(data.nodes).length === 0) {
+                topologyContent.innerHTML = '<div class="loading">No nodes detected</div>';
+                return;
+            }
+            
+            // Simple topology visualization
+            let html = '<div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">';
+            
+            Object.values(data.nodes).forEach(node => {
+                const statusClass = node.status === 'online' ? 'status-online' : 'status-offline';
+                html += `
+                    <div style="background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; text-align: center; min-width: 100px;">
+                        <div style="margin-bottom: 5px;">${node.name}</div>
+                        <div class="status-indicator ${statusClass}" style="margin: 0 auto;"></div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            topologyContent.innerHTML = html;
+        }
+        
+        function formatUptime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            if (hours > 0) {
+                return `${hours}h ${minutes}m`;
+            } else if (minutes > 0) {
+                return `${minutes}m ${secs}s`;
+            } else {
+                return `${secs}s`;
+            }
+        }
+        
+        function showError(message) {
+            const container = document.querySelector('.container');
+            const existingError = container.querySelector('.error');
+            if (existingError) existingError.remove();
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            container.insertBefore(errorDiv, container.firstChild);
+            
+            setTimeout(() => errorDiv.remove(), 5000);
+        }
+        
+        async function refreshData() {
+            const data = await fetchData();
+            if (data) {
+                updateStats(data);
+                updateNodes(data);
+                updateTopology(data);
+            }
+        }
+        
+        function startAutoRefresh() {
+            refreshInterval = setInterval(refreshData, 2000); // Refresh every 2 seconds
+        }
+        
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshData();
+            startAutoRefresh();
+        });
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', stopAutoRefresh);
+    </script>
+</body>
+</html>

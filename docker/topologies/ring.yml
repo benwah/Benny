@@ -1,0 +1,93 @@
+# Ring topology: node1 -> node2 -> node3 -> node4 -> node1
+version: '3.8'
+
+services:
+  neural-node-1:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.server
+    container_name: neural-node-1
+    environment:
+      - NEURAL_NODE_NAME=node-1
+      - NEURAL_HOST=0.0.0.0
+      - NEURAL_PORT=8080
+      - NEURAL_LAYERS=4,8,4,2
+      - NEURAL_LEARNING_RATE=0.01
+      - NEURAL_HEBBIAN_MODE=Classic
+    ports:
+      - "8081:8080"
+    volumes:
+      - ../config/default.toml:/app/config/network.toml:ro
+    networks:
+      - neural-net
+    command: ["neural_network", "server", "-c", "/app/config/network.toml", "-p", "8080", "--outputs", "neural-node-2:8080"]
+
+  neural-node-2:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.server
+    container_name: neural-node-2
+    environment:
+      - NEURAL_NODE_NAME=node-2
+      - NEURAL_HOST=0.0.0.0
+      - NEURAL_PORT=8080
+      - NEURAL_LAYERS=4,6,4,2
+      - NEURAL_LEARNING_RATE=0.015
+      - NEURAL_HEBBIAN_MODE=Competitive
+    ports:
+      - "8082:8080"
+    volumes:
+      - ../config/default.toml:/app/config/network.toml:ro
+    networks:
+      - neural-net
+    depends_on:
+      - neural-node-1
+    command: ["neural_network", "server", "-c", "/app/config/network.toml", "-p", "8080", "--outputs", "neural-node-3:8080"]
+
+  neural-node-3:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.server
+    container_name: neural-node-3
+    environment:
+      - NEURAL_NODE_NAME=node-3
+      - NEURAL_HOST=0.0.0.0
+      - NEURAL_PORT=8080
+      - NEURAL_LAYERS=4,10,4,2
+      - NEURAL_LEARNING_RATE=0.012
+      - NEURAL_HEBBIAN_MODE=Oja
+    ports:
+      - "8083:8080"
+    volumes:
+      - ../config/default.toml:/app/config/network.toml:ro
+    networks:
+      - neural-net
+    depends_on:
+      - neural-node-2
+    command: ["neural_network", "server", "-c", "/app/config/network.toml", "-p", "8080", "--outputs", "neural-node-4:8080"]
+
+  neural-node-4:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.server
+    container_name: neural-node-4
+    environment:
+      - NEURAL_NODE_NAME=node-4
+      - NEURAL_HOST=0.0.0.0
+      - NEURAL_PORT=8080
+      - NEURAL_LAYERS=4,12,4,2
+      - NEURAL_LEARNING_RATE=0.008
+      - NEURAL_HEBBIAN_MODE=BCM
+    ports:
+      - "8084:8080"
+    volumes:
+      - ../config/default.toml:/app/config/network.toml:ro
+    networks:
+      - neural-net
+    depends_on:
+      - neural-node-3
+    command: ["neural_network", "server", "-c", "/app/config/network.toml", "-p", "8080", "--outputs", "neural-node-1:8080"]
+
+networks:
+  neural-net:
+    driver: bridge
