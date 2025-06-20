@@ -1,18 +1,25 @@
-pub mod neural_network;
-pub mod network_composer;
-pub mod distributed_network;
-pub mod secure_network;
-pub mod io_interface;
 pub mod cli;
+pub mod distributed_network;
+pub mod input_server;
+pub mod io_interface;
+pub mod network_composer;
+pub mod neural_network;
 pub mod runner;
+pub mod secure_network;
 pub mod server;
 
-pub use neural_network::{NeuralNetwork, HebbianLearningMode};
-pub use network_composer::{NetworkComposer, NetworkConnection};
-pub use distributed_network::{DistributedNetwork, NetworkMessage, MessagePayload, MessageType, ProtocolError, capabilities};
-pub use secure_network::{SecureDistributedNetwork, NetworkCertificate, TlsConfig, SecureNetworkError};
+pub use distributed_network::{
+    DistributedNetwork, MessagePayload, MessageType, NetworkMessage, ProtocolError, capabilities,
+};
+pub use input_server::{
+    InputServer, InputServerConfig, NetworkInfo, NeuralNetworkTarget, WebSocketMessage,
+};
 pub use io_interface::{
-    InputNode, OutputNode, SecureInputNode, SecureOutputNode,
-    IoNodeConfig, IoError, ExternalSourceConfig, ExternalSinkConfig,
-    IoConnectionId
+    ExternalSinkConfig, ExternalSourceConfig, InputNode, IoConnectionId, IoError, IoNodeConfig,
+    OutputNode, SecureInputNode, SecureOutputNode,
+};
+pub use network_composer::{NetworkComposer, NetworkConnection};
+pub use neural_network::{HebbianLearningMode, NeuralNetwork};
+pub use secure_network::{
+    NetworkCertificate, SecureDistributedNetwork, SecureNetworkError, TlsConfig,
 };

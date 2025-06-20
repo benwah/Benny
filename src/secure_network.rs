@@ -1,3 +1,5 @@
+use rustls::{Certificate, ClientConfig, PrivateKey, ServerConfig};
+use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
@@ -6,13 +8,13 @@ use std::sync::{Arc, Mutex};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use tokio_rustls::{TlsAcceptor, TlsConnector};
-use rustls::{Certificate, ClientConfig, PrivateKey, ServerConfig};
-use rustls_pemfile::{certs, pkcs8_private_keys};
-use x509_parser::prelude::*;
 use uuid::Uuid;
+use x509_parser::prelude::*;
 
+use crate::distributed_network::{
+    MessagePayload, NetworkId, NetworkMessage, ProtocolError, capabilities,
+};
 use crate::neural_network::NeuralNetwork;
-use crate::distributed_network::{NetworkMessage, NetworkId, ProtocolError, MessagePayload, capabilities};
 
 /// Certificate-based authentication for neural networks
 #[derive(Debug, Clone)]
@@ -29,25 +31,25 @@ pub struct NetworkCertificate {
 impl NetworkCertificate {
     /// Parse a certificate from PEM data
     pub fn from_pem(pem_data: &[u8]) -> Result<Self, SecureNetworkError> {
-        let cert = parse_x509_certificate(pem_data)
-            .map_err(|_| SecureNetworkError::InvalidCertificate)?;
-        
+        let cert =
+            parse_x509_certificate(pem_data).map_err(|_| SecureNetworkError::InvalidCertificate)?;
+
         let cert = cert.1;
-        
+
         // Extract network ID from certificate subject
         let network_id = Self::extract_network_id(&cert)?;
-        
+
         // Extract common name and organization
         let common_name = Self::extract_subject_field(&cert, "CN")?;
         let organization = Self::extract_subject_field(&cert, "O").unwrap_or_default();
-        
+
         // Extract validity period
         let valid_from = cert.validity().not_before.timestamp() as u64;
         let valid_until = cert.validity().not_after.timestamp() as u64;
-        
+
         // Extract capabilities from certificate extensions
         let capabilities = Self::extract_capabilities(&cert)?;
-        
+
         Ok(NetworkCertificate {
             network_id,
             common_name,
@@ -58,17 +60,17 @@ impl NetworkCertificate {
             certificate_data: pem_data.to_vec(),
         })
     }
-    
+
     /// Extract network ID from certificate subject
     fn extract_network_id(cert: &X509Certificate) -> Result<NetworkId, SecureNetworkError> {
         // Look for network ID in subject alternative name or common name
         let cn = Self::extract_subject_field(cert, "CN")?;
-        
+
         // Try to parse as UUID
         if let Ok(uuid) = Uuid::parse_str(&cn) {
             return Ok(uuid);
         }
-        
+
         // Look in subject alternative names
         let extensions = cert.extensions();
         for ext in extensions {
@@ -82,52 +84,55 @@ impl NetworkCertificate {
                 }
             }
         }
-        
+
         Err(SecureNetworkError::InvalidNetworkId)
     }
-    
+
     /// Extract subject field from certificate
-    fn extract_subject_field(_cert: &X509Certificate, field: &str) -> Result<String, SecureNetworkError> {
+    fn extract_subject_field(
+        _cert: &X509Certificate,
+        field: &str,
+    ) -> Result<String, SecureNetworkError> {
         // Simplified implementation for demonstration
         // In a real implementation, you would properly parse the subject DN
         match field {
             "CN" => Ok("demo-network".to_string()),
             "O" => Ok("Demo Organization".to_string()),
-            _ => Err(SecureNetworkError::MissingCertificateField(field.to_string()))
+            _ => Err(SecureNetworkError::MissingCertificateField(
+                field.to_string(),
+            )),
         }
     }
-    
+
     /// Extract neural network capabilities from certificate extensions
     fn extract_capabilities(cert: &X509Certificate) -> Result<u32, SecureNetworkError> {
         // Default capabilities if not specified in certificate
-        let mut caps = capabilities::FORWARD_PROPAGATION 
-                     | capabilities::BACKPROPAGATION 
-                     | capabilities::HEBBIAN_LEARNING;
-        
+        let mut caps = capabilities::FORWARD_PROPAGATION
+            | capabilities::BACKPROPAGATION
+            | capabilities::HEBBIAN_LEARNING;
+
         // Look for custom extension with capabilities
         let extensions = cert.extensions();
         for ext in extensions {
             // Custom OID for neural network capabilities: 1.3.6.1.4.1.99999.1
             if ext.oid.to_string() == "1.3.6.1.4.1.99999.1" && ext.value.len() >= 4 {
-                caps = u32::from_be_bytes([
-                    ext.value[0], ext.value[1], ext.value[2], ext.value[3]
-                ]);
+                caps = u32::from_be_bytes([ext.value[0], ext.value[1], ext.value[2], ext.value[3]]);
             }
         }
-        
+
         Ok(caps)
     }
-    
+
     /// Verify certificate is valid for current time
     pub fn is_valid(&self) -> bool {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         now >= self.valid_from && now <= self.valid_until
     }
-    
+
     /// Check if certificate has specific capability
     pub fn has_capability(&self, capability: u32) -> bool {
         (self.capabilities & capability) != 0
@@ -152,7 +157,9 @@ impl std::fmt::Display for SecureNetworkError {
         match self {
             SecureNetworkError::InvalidCertificate => write!(f, "Invalid certificate"),
             SecureNetworkError::InvalidNetworkId => write!(f, "Invalid network ID"),
-            SecureNetworkError::MissingCertificateField(field) => write!(f, "Missing certificate field: {}", field),
+            SecureNetworkError::MissingCertificateField(field) => {
+                write!(f, "Missing certificate field: {}", field)
+            }
             SecureNetworkError::CertificateExpired => write!(f, "Certificate expired"),
             SecureNetworkError::InsufficientCapabilities => write!(f, "Insufficient capabilities"),
             SecureNetworkError::TlsError(msg) => write!(f, "TLS error: {}", msg),
@@ -222,7 +229,7 @@ impl TlsConfig {
         let mut key_reader = BufReader::new(key_file);
         let mut keys = pkcs8_private_keys(&mut key_reader)
             .map_err(|_| SecureNetworkError::InvalidCertificate)?;
-        
+
         if keys.is_empty() {
             return Err(SecureNetworkError::InvalidCertificate);
         }
@@ -296,40 +303,50 @@ impl SecureDistributedNetwork {
     }
 
     /// Start secure TLS server
-    pub async fn start_secure_server(&self, address: &str, port: u16) -> Result<(), SecureNetworkError> {
+    pub async fn start_secure_server(
+        &self,
+        address: &str,
+        port: u16,
+    ) -> Result<(), SecureNetworkError> {
         let listener = TcpListener::bind(format!("{}:{}", address, port)).await?;
         let acceptor = TlsAcceptor::from(self.tls_config.server_config.clone());
-        
-        println!("🔒 Secure Neural Network Protocol server listening on {}:{}", address, port);
+
+        println!(
+            "🔒 Secure Neural Network Protocol server listening on {}:{}",
+            address, port
+        );
         println!("📡 Network ID: {}", self.id);
-        println!("🛡️  Certificate: {} ({})", self.certificate.common_name, self.certificate.organization);
+        println!(
+            "🛡️  Certificate: {} ({})",
+            self.certificate.common_name, self.certificate.organization
+        );
         println!("🔐 TLS encryption enabled with certificate authentication");
 
         loop {
             match listener.accept().await {
                 Ok((stream, peer_addr)) => {
                     println!("🔗 New secure connection from {}", peer_addr);
-                    
+
                     let acceptor = acceptor.clone();
                     let message_sender = self.message_sender.clone();
                     let connections = self.connections.clone();
-                    
+
                     tokio::spawn(async move {
                         match acceptor.accept(stream).await {
                             Ok(_tls_stream) => {
                                 println!("✅ TLS handshake successful with {}", peer_addr);
-                                
+
                                 // Verify peer certificate
                                 if let Err(e) = Self::verify_peer_certificate().await {
                                     println!("❌ Certificate verification failed: {:?}", e);
                                     return;
                                 }
-                                
+
                                 // Handle secure connection
-                                if let Err(e) = Self::handle_secure_connection(
-                                    message_sender, 
-                                    connections
-                                ).await {
+                                if let Err(e) =
+                                    Self::handle_secure_connection(message_sender, connections)
+                                        .await
+                                {
                                     println!("❌ Secure connection error: {:?}", e);
                                 }
                             }
@@ -347,22 +364,31 @@ impl SecureDistributedNetwork {
     }
 
     /// Connect to a secure peer
-    pub async fn connect_to_secure(&self, address: &str, port: u16) -> Result<NetworkId, SecureNetworkError> {
+    pub async fn connect_to_secure(
+        &self,
+        address: &str,
+        port: u16,
+    ) -> Result<NetworkId, SecureNetworkError> {
         let connector = TlsConnector::from(self.tls_config.client_config.clone());
         let stream = TcpStream::connect(format!("{}:{}", address, port)).await?;
-        
+
         // Perform TLS handshake
         let domain = rustls::ServerName::try_from(address)
             .map_err(|e| SecureNetworkError::TlsError(e.to_string()))?;
-        
-        let _tls_stream = connector.connect(domain, stream).await
+
+        let _tls_stream = connector
+            .connect(domain, stream)
+            .await
             .map_err(|e| SecureNetworkError::TlsError(e.to_string()))?;
-        
-        println!("🔒 Secure TLS connection established to {}:{}", address, port);
-        
+
+        println!(
+            "🔒 Secure TLS connection established to {}:{}",
+            address, port
+        );
+
         // Verify peer certificate
         let peer_cert = Self::verify_peer_certificate().await?;
-        
+
         // Send handshake message
         let _handshake = NetworkMessage {
             msg_type: crate::distributed_network::MessageType::Handshake,
@@ -374,10 +400,10 @@ impl SecureDistributedNetwork {
                 layers: vec![3, 6, 2], // Example layer configuration
             },
         };
-        
+
         // Send handshake (implementation would serialize and send over TLS stream)
         // For now, we'll simulate successful handshake
-        
+
         // Store secure connection
         let secure_conn = SecureConnection {
             peer_id: peer_cert.network_id,
@@ -387,15 +413,17 @@ impl SecureDistributedNetwork {
                 .unwrap()
                 .as_secs(),
         };
-        
+
         {
             let mut connections = self.connections.lock().unwrap();
             connections.insert(peer_cert.network_id, secure_conn);
         }
-        
-        println!("✅ Authenticated connection to network {} ({})", 
-                peer_cert.network_id, peer_cert.common_name);
-        
+
+        println!(
+            "✅ Authenticated connection to network {} ({})",
+            peer_cert.network_id, peer_cert.common_name
+        );
+
         Ok(peer_cert.network_id)
     }
 
@@ -407,7 +435,7 @@ impl SecureDistributedNetwork {
         // 3. Check certificate validity period
         // 4. Extract neural network capabilities
         // 5. Verify the network ID matches the certificate
-        
+
         // For demonstration, we'll create a mock certificate
         Ok(NetworkCertificate {
             network_id: Uuid::new_v4(),
@@ -440,12 +468,12 @@ impl SecureDistributedNetwork {
 
     /// Send secure message to authenticated peer
     pub async fn send_secure_message(
-        &self, 
-        peer_id: NetworkId, 
-        message: NetworkMessage
+        &self,
+        peer_id: NetworkId,
+        message: NetworkMessage,
     ) -> Result<(), SecureNetworkError> {
         let connections = self.connections.lock().unwrap();
-        
+
         if let Some(connection) = connections.get(&peer_id) {
             // Verify peer has required capabilities for this message type
             let required_capability = match message.payload {
@@ -454,23 +482,32 @@ impl SecureDistributedNetwork {
                 MessagePayload::HebbianData { .. } => capabilities::HEBBIAN_LEARNING,
                 _ => 0,
             };
-            
-            if required_capability != 0 && !connection.peer_certificate.has_capability(required_capability) {
+
+            if required_capability != 0
+                && !connection
+                    .peer_certificate
+                    .has_capability(required_capability)
+            {
                 return Err(SecureNetworkError::InsufficientCapabilities);
             }
-            
+
             // Verify certificate is still valid
             if !connection.peer_certificate.is_valid() {
                 return Err(SecureNetworkError::CertificateExpired);
             }
-            
+
             // Send message over secure TLS connection
             // Implementation would serialize and send over the encrypted stream
-            println!("🔐 Sending secure message to authenticated peer {}", peer_id);
-            
+            println!(
+                "🔐 Sending secure message to authenticated peer {}",
+                peer_id
+            );
+
             Ok(())
         } else {
-            Err(SecureNetworkError::ProtocolError(ProtocolError::InvalidPayload))
+            Err(SecureNetworkError::ProtocolError(
+                ProtocolError::InvalidPayload,
+            ))
         }
     }
 }
@@ -478,7 +515,7 @@ impl SecureDistributedNetwork {
 /// Certificate generation utilities for testing and development
 pub mod cert_utils {
     use super::*;
-    
+
     /// Generate a self-signed certificate for testing
     pub fn generate_test_certificate(
         network_id: NetworkId,
@@ -488,19 +525,27 @@ pub mod cert_utils {
     ) -> Result<(Vec<u8>, Vec<u8>), SecureNetworkError> {
         // In a real implementation, this would use a crypto library like rcgen
         // to generate actual X.509 certificates with the neural network extensions
-        
+
         println!("🧪 Generating test certificate for network {}", network_id);
         println!("   CN: {}", common_name);
         println!("   O: {}", organization);
         println!("   Capabilities: 0x{:08x}", capabilities);
-        
+
         // Return mock certificate and private key data
         Ok((
-            format!("-----BEGIN CERTIFICATE-----\nMOCK_CERT_FOR_{}\n-----END CERTIFICATE-----", network_id).into_bytes(),
-            format!("-----BEGIN PRIVATE KEY-----\nMOCK_KEY_FOR_{}\n-----END PRIVATE KEY-----", network_id).into_bytes(),
+            format!(
+                "-----BEGIN CERTIFICATE-----\nMOCK_CERT_FOR_{}\n-----END CERTIFICATE-----",
+                network_id
+            )
+            .into_bytes(),
+            format!(
+                "-----BEGIN PRIVATE KEY-----\nMOCK_KEY_FOR_{}\n-----END PRIVATE KEY-----",
+                network_id
+            )
+            .into_bytes(),
         ))
     }
-    
+
     /// Create a certificate authority for a neural network cluster
     pub fn create_neural_ca(
         ca_name: &str,
@@ -509,11 +554,19 @@ pub mod cert_utils {
         println!("🏛️  Creating Neural Network Certificate Authority");
         println!("   CA Name: {}", ca_name);
         println!("   Organization: {}", organization);
-        
+
         // Return mock CA certificate and private key
         Ok((
-            format!("-----BEGIN CERTIFICATE-----\nMOCK_CA_CERT_FOR_{}\n-----END CERTIFICATE-----", ca_name).into_bytes(),
-            format!("-----BEGIN PRIVATE KEY-----\nMOCK_CA_KEY_FOR_{}\n-----END PRIVATE KEY-----", ca_name).into_bytes(),
+            format!(
+                "-----BEGIN CERTIFICATE-----\nMOCK_CA_CERT_FOR_{}\n-----END CERTIFICATE-----",
+                ca_name
+            )
+            .into_bytes(),
+            format!(
+                "-----BEGIN PRIVATE KEY-----\nMOCK_CA_KEY_FOR_{}\n-----END PRIVATE KEY-----",
+                ca_name
+            )
+            .into_bytes(),
         ))
     }
 }
@@ -521,7 +574,6 @@ pub mod cert_utils {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[test]
     fn test_certificate_capabilities() {
@@ -534,41 +586,41 @@ mod tests {
             capabilities: capabilities::FORWARD_PROPAGATION | capabilities::HEBBIAN_LEARNING,
             certificate_data: Vec::new(),
         };
-        
+
         assert!(cert.has_capability(capabilities::FORWARD_PROPAGATION));
         assert!(cert.has_capability(capabilities::HEBBIAN_LEARNING));
         assert!(!cert.has_capability(capabilities::BACKPROPAGATION));
     }
-    
+
     #[test]
     fn test_certificate_validity() {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         let valid_cert = NetworkCertificate {
             network_id: Uuid::new_v4(),
             common_name: "test-network".to_string(),
             organization: "Test Org".to_string(),
-            valid_from: now - 3600, // 1 hour ago
+            valid_from: now - 3600,  // 1 hour ago
             valid_until: now + 3600, // 1 hour from now
             capabilities: capabilities::FORWARD_PROPAGATION,
             certificate_data: Vec::new(),
         };
-        
+
         assert!(valid_cert.is_valid());
-        
+
         let expired_cert = NetworkCertificate {
             network_id: Uuid::new_v4(),
             common_name: "expired-network".to_string(),
             organization: "Test Org".to_string(),
-            valid_from: now - 7200, // 2 hours ago
+            valid_from: now - 7200,  // 2 hours ago
             valid_until: now - 3600, // 1 hour ago (expired)
             capabilities: capabilities::FORWARD_PROPAGATION,
             certificate_data: Vec::new(),
         };
-        
+
         assert!(!expired_cert.is_valid());
     }
 }

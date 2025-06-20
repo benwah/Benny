@@ -1,9 +1,9 @@
-use crate::neural_network::{NeuralNetwork, HebbianLearningMode};
+use crate::neural_network::{HebbianLearningMode, NeuralNetwork};
+use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use chrono::{DateTime, Utc};
 
 #[derive(Parser)]
 #[command(name = "benny")]
@@ -266,7 +266,7 @@ impl NetworkConfig {
         // Configure additional parameters
         nn.set_hebbian_rate(self.hebbian_rate);
         nn.set_decay_rate(self.decay_rate);
-        
+
         if self.use_backprop {
             nn.set_backprop_enabled(true, self.backprop_rate);
         }
@@ -274,13 +274,18 @@ impl NetworkConfig {
         Ok(nn)
     }
 
-    pub fn load_from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load_from_file<P: AsRef<std::path::Path>>(
+        path: P,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let content = fs::read_to_string(path)?;
         let config: NetworkConfig = toml::from_str(&content)?;
         Ok(config)
     }
 
-    pub fn save_to_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save_to_file<P: AsRef<std::path::Path>>(
+        &self,
+        path: P,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let content = toml::to_string_pretty(self)?;
         fs::write(path, content)?;
         Ok(())
@@ -288,25 +293,28 @@ impl NetworkConfig {
 }
 
 impl TrainingData {
-    pub fn load_from_csv<P: AsRef<std::path::Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load_from_csv<P: AsRef<std::path::Path>>(
+        path: P,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut reader = csv::Reader::from_path(path)?;
         let mut inputs = Vec::new();
         let mut targets = Vec::new();
 
         for result in reader.records() {
             let record = result?;
-            let values: Vec<f64> = record.iter()
+            let values: Vec<f64> = record
+                .iter()
                 .map(|s| s.parse::<f64>())
                 .collect::<Result<Vec<_>, _>>()?;
-            
+
             if values.len() < 2 {
                 return Err("CSV must have at least 2 columns (input and target)".into());
             }
-            
+
             // Assume last column is target, rest are inputs
-            let input = values[..values.len()-1].to_vec();
-            let target = vec![values[values.len()-1]];
-            
+            let input = values[..values.len() - 1].to_vec();
+            let target = vec![values[values.len() - 1]];
+
             inputs.push(input);
             targets.push(target);
         }
@@ -314,13 +322,18 @@ impl TrainingData {
         Ok(TrainingData { inputs, targets })
     }
 
-    pub fn load_from_json<P: AsRef<std::path::Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load_from_json<P: AsRef<std::path::Path>>(
+        path: P,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let content = fs::read_to_string(path)?;
         let data: TrainingData = serde_json::from_str(&content)?;
         Ok(data)
     }
 
-    pub fn save_to_json<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save_to_json<P: AsRef<std::path::Path>>(
+        &self,
+        path: P,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let content = serde_json::to_string_pretty(self)?;
         fs::write(path, content)?;
         Ok(())
@@ -345,10 +358,8 @@ pub fn parse_input_string(input: &str) -> Result<Vec<f64>, Box<dyn std::error::E
         }
     } else {
         // Parse as comma-separated values
-        let values: Result<Vec<f64>, _> = input
-            .split(',')
-            .map(|s| s.trim().parse::<f64>())
-            .collect();
+        let values: Result<Vec<f64>, _> =
+            input.split(',').map(|s| s.trim().parse::<f64>()).collect();
         Ok(values?)
     }
 }

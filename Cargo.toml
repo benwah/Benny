@@ -28,6 +28,9 @@ log = "0.4"
 env_logger = "0.10"
 async-trait = "0.1"
 thiserror = "1.0"
+warp = "0.3"
+tokio-tungstenite = "0.20"
+serde_derive = "1.0"
 
 [[example]]
 name = "simple_example"
@@ -64,5 +67,13 @@ path = "examples/online_learning.rs"
 [[example]]
 name = "network_serialization"
 path = "examples/network_serialization.rs"
+
+[[example]]
+name = "neural_network_server"
+path = "examples/neural_network_server.rs"
+
+[[bin]]
+name = "input_server"
+path = "src/bin/input_server.rs"
 
 

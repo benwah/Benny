@@ -1,6 +1,6 @@
 use neural_network::{
-    NeuralNetwork, NetworkCertificate,
-    HebbianLearningMode, capabilities, secure_network::cert_utils
+    HebbianLearningMode, NetworkCertificate, NeuralNetwork, capabilities,
+    secure_network::cert_utils,
 };
 use uuid::Uuid;
 
@@ -15,38 +15,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🏛️  Setting up Certificate Authority...");
     let (_ca_cert, _ca_key) = cert_utils::create_neural_ca(
         "Neural Network Research CA",
-        "Distributed AI Research Consortium"
+        "Distributed AI Research Consortium",
     )?;
-    
+
     println!("✅ Certificate Authority created");
     println!();
 
     // Create certificates for two neural networks
     println!("📜 Generating network certificates...");
-    
+
     let alpha_id = Uuid::new_v4();
     let beta_id = Uuid::new_v4();
-    
+
     let (alpha_cert_pem, _alpha_key_pem) = cert_utils::generate_test_certificate(
         alpha_id,
         "alpha-neural-net.research.edu",
         "University Research Lab",
-        capabilities::FORWARD_PROPAGATION | capabilities::HEBBIAN_LEARNING | capabilities::REAL_TIME
+        capabilities::FORWARD_PROPAGATION
+            | capabilities::HEBBIAN_LEARNING
+            | capabilities::REAL_TIME,
     )?;
-    
+
     let (beta_cert_pem, _beta_key_pem) = cert_utils::generate_test_certificate(
         beta_id,
-        "beta-neural-net.hospital.org", 
+        "beta-neural-net.hospital.org",
         "Medical AI Research Center",
-        capabilities::FORWARD_PROPAGATION | capabilities::BACKPROPAGATION | capabilities::HEBBIAN_LEARNING
+        capabilities::FORWARD_PROPAGATION
+            | capabilities::BACKPROPAGATION
+            | capabilities::HEBBIAN_LEARNING,
     )?;
-    
+
     println!("✅ Network certificates generated");
     println!();
 
     // Parse certificates
     println!("🔍 Parsing certificates...");
-    
+
     // For demonstration, we'll create mock certificates since we're using test data
     let alpha_cert = NetworkCertificate {
         network_id: alpha_id,
@@ -59,11 +63,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         valid_until: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_secs() + 365 * 24 * 3600, // Valid for 1 year
-        capabilities: capabilities::FORWARD_PROPAGATION | capabilities::HEBBIAN_LEARNING | capabilities::REAL_TIME,
+            .as_secs()
+            + 365 * 24 * 3600, // Valid for 1 year
+        capabilities: capabilities::FORWARD_PROPAGATION
+            | capabilities::HEBBIAN_LEARNING
+            | capabilities::REAL_TIME,
         certificate_data: alpha_cert_pem,
     };
-    
+
     let beta_cert = NetworkCertificate {
         network_id: beta_id,
         common_name: "beta-neural-net.hospital.org".to_string(),
@@ -75,8 +82,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         valid_until: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_secs() + 365 * 24 * 3600, // Valid for 1 year
-        capabilities: capabilities::FORWARD_PROPAGATION | capabilities::BACKPROPAGATION | capabilities::HEBBIAN_LEARNING,
+            .as_secs()
+            + 365 * 24 * 3600, // Valid for 1 year
+        capabilities: capabilities::FORWARD_PROPAGATION
+            | capabilities::BACKPROPAGATION
+            | capabilities::HEBBIAN_LEARNING,
         certificate_data: beta_cert_pem,
     };
 
@@ -97,29 +107,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Create neural networks
-    let _alpha_network = NeuralNetwork::with_layers_and_mode(
-        &[3, 6, 2], 
-        0.1, 
-        HebbianLearningMode::Classic
-    );
-    
-    let _beta_network = NeuralNetwork::with_layers_and_mode(
-        &[2, 4, 1], 
-        0.1, 
-        HebbianLearningMode::Competitive
-    );
+    let _alpha_network =
+        NeuralNetwork::with_layers_and_mode(&[3, 6, 2], 0.1, HebbianLearningMode::Classic);
+
+    let _beta_network =
+        NeuralNetwork::with_layers_and_mode(&[2, 4, 1], 0.1, HebbianLearningMode::Competitive);
 
     // For demonstration, we'll create mock TLS configs
     // In a real implementation, these would be loaded from actual certificate files
     println!("🔐 Setting up TLS configuration...");
-    
+
     // Note: In a real implementation, you would use:
     // let tls_config = TlsConfig::from_files(
     //     Path::new("alpha_cert.pem"),
     //     Path::new("alpha_key.pem"),
     //     Some(Path::new("ca_cert.pem"))
     // )?;
-    
+
     println!("⚠️  Note: Using mock TLS configuration for demonstration");
     println!("   In production, load actual certificate files:");
     println!("   - Server certificate: alpha_cert.pem");
@@ -130,26 +134,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Demonstrate certificate-based capabilities checking
     println!("🛡️  Certificate-based Security Features:");
     println!();
-    
+
     println!("🔍 Capability Verification:");
-    println!("   Alpha can do forward propagation: {}", 
-            alpha_cert.has_capability(capabilities::FORWARD_PROPAGATION));
-    println!("   Alpha can do backpropagation: {}", 
-            alpha_cert.has_capability(capabilities::BACKPROPAGATION));
-    println!("   Alpha can do Hebbian learning: {}", 
-            alpha_cert.has_capability(capabilities::HEBBIAN_LEARNING));
-    println!("   Alpha supports real-time: {}", 
-            alpha_cert.has_capability(capabilities::REAL_TIME));
+    println!(
+        "   Alpha can do forward propagation: {}",
+        alpha_cert.has_capability(capabilities::FORWARD_PROPAGATION)
+    );
+    println!(
+        "   Alpha can do backpropagation: {}",
+        alpha_cert.has_capability(capabilities::BACKPROPAGATION)
+    );
+    println!(
+        "   Alpha can do Hebbian learning: {}",
+        alpha_cert.has_capability(capabilities::HEBBIAN_LEARNING)
+    );
+    println!(
+        "   Alpha supports real-time: {}",
+        alpha_cert.has_capability(capabilities::REAL_TIME)
+    );
     println!();
-    
-    println!("   Beta can do forward propagation: {}", 
-            beta_cert.has_capability(capabilities::FORWARD_PROPAGATION));
-    println!("   Beta can do backpropagation: {}", 
-            beta_cert.has_capability(capabilities::BACKPROPAGATION));
-    println!("   Beta can do Hebbian learning: {}", 
-            beta_cert.has_capability(capabilities::HEBBIAN_LEARNING));
-    println!("   Beta supports real-time: {}", 
-            beta_cert.has_capability(capabilities::REAL_TIME));
+
+    println!(
+        "   Beta can do forward propagation: {}",
+        beta_cert.has_capability(capabilities::FORWARD_PROPAGATION)
+    );
+    println!(
+        "   Beta can do backpropagation: {}",
+        beta_cert.has_capability(capabilities::BACKPROPAGATION)
+    );
+    println!(
+        "   Beta can do Hebbian learning: {}",
+        beta_cert.has_capability(capabilities::HEBBIAN_LEARNING)
+    );
+    println!(
+        "   Beta supports real-time: {}",
+        beta_cert.has_capability(capabilities::REAL_TIME)
+    );
     println!();
 
     println!("🔒 Security Benefits:");
@@ -231,4 +251,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-

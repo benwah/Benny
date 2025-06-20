@@ -1,5 +1,5 @@
-use neural_network::{NeuralNetwork, DistributedNetwork, HebbianLearningMode};
-use tokio::time::{sleep, Duration};
+use neural_network::{DistributedNetwork, HebbianLearningMode, NeuralNetwork};
+use tokio::time::{Duration, sleep};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -9,17 +9,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Create two neural networks that will communicate
-    let network1 = NeuralNetwork::with_layers_and_mode(
-        &[2, 4, 2], 
-        0.1, 
-        HebbianLearningMode::Classic
-    );
-    
-    let network2 = NeuralNetwork::with_layers_and_mode(
-        &[2, 3, 1], 
-        0.1, 
-        HebbianLearningMode::Competitive
-    );
+    let network1 =
+        NeuralNetwork::with_layers_and_mode(&[2, 4, 2], 0.1, HebbianLearningMode::Classic);
+
+    let network2 =
+        NeuralNetwork::with_layers_and_mode(&[2, 3, 1], 0.1, HebbianLearningMode::Competitive);
 
     // Create distributed network nodes
     let (dist_net1, mut receiver1) = DistributedNetwork::new(
@@ -91,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     sleep(Duration::from_millis(500)).await;
 
     println!("🔗 Establishing connections...");
-    
+
     // Connect AlphaNet to BetaNet
     match dist_net1.connect_to("127.0.0.1", 8002).await {
         Ok(peer_id) => {
@@ -116,16 +110,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Demonstrate data exchange
     println!("🧬 Testing neural data exchange...");
-    
+
     // Send forward propagation data
     let test_data = vec![0.5, 0.8];
     println!("📤 AlphaNet sending forward data: {:?}", test_data);
-    
-    if let Err(e) = dist_net1.send_forward_data(
-        dist_net2.id, 
-        0, // layer 0
-        test_data.clone()
-    ).await {
+
+    if let Err(e) = dist_net1
+        .send_forward_data(
+            dist_net2.id,
+            0, // layer 0
+            test_data.clone(),
+        )
+        .await
+    {
         println!("❌ Failed to send forward data: {:?}", e);
     }
 
@@ -133,14 +130,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Send Hebbian correlation data
     let correlations = vec![0.7, 0.3, 0.9, 0.1];
-    println!("📤 AlphaNet sending Hebbian correlations: {:?}", correlations);
-    
-    if let Err(e) = dist_net1.send_hebbian_data(
-        dist_net2.id,
-        1, // layer 1
-        correlations,
-        0.1 // learning rate
-    ).await {
+    println!(
+        "📤 AlphaNet sending Hebbian correlations: {:?}",
+        correlations
+    );
+
+    if let Err(e) = dist_net1
+        .send_hebbian_data(
+            dist_net2.id,
+            1, // layer 1
+            correlations,
+            0.1, // learning rate
+        )
+        .await
+    {
         println!("❌ Failed to send Hebbian data: {:?}", e);
     }
 
@@ -185,4 +188,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-

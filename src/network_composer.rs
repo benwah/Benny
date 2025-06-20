@@ -6,8 +6,8 @@ use std::collections::HashMap;
 pub struct NetworkConnection {
     pub source_network: String,
     pub target_network: String,
-    pub source_outputs: Vec<usize>,  // Which outputs from source
-    pub target_inputs: Vec<usize>,   // Which inputs to target
+    pub source_outputs: Vec<usize>, // Which outputs from source
+    pub target_inputs: Vec<usize>,  // Which inputs to target
 }
 
 /// A composer that manages multiple neural networks and their connections
@@ -33,7 +33,7 @@ impl NetworkComposer {
         if self.networks.contains_key(&name) {
             return Err(format!("Network '{}' already exists", name));
         }
-        
+
         self.networks.insert(name.clone(), network);
         self.update_execution_order();
         Ok(())
@@ -42,13 +42,13 @@ impl NetworkComposer {
     /// Remove a neural network from the composer
     pub fn remove_network(&mut self, name: &str) -> Result<NeuralNetwork, String> {
         // Remove all connections involving this network
-        self.connections.retain(|conn| {
-            conn.source_network != name && conn.target_network != name
-        });
-        
+        self.connections
+            .retain(|conn| conn.source_network != name && conn.target_network != name);
+
         self.update_execution_order();
-        
-        self.networks.remove(name)
+
+        self.networks
+            .remove(name)
             .ok_or_else(|| format!("Network '{}' not found", name))
     }
 
@@ -61,17 +61,24 @@ impl NetworkComposer {
         target_inputs: Vec<usize>,
     ) -> Result<(), String> {
         // Validate networks exist
-        let source_net = self.networks.get(source_name)
+        let source_net = self
+            .networks
+            .get(source_name)
             .ok_or_else(|| format!("Source network '{}' not found", source_name))?;
-        let target_net = self.networks.get(target_name)
+        let target_net = self
+            .networks
+            .get(target_name)
             .ok_or_else(|| format!("Target network '{}' not found", target_name))?;
 
         // Validate output indices
         let source_output_size = source_net.get_layers().last().unwrap();
         for &output_idx in &source_outputs {
             if output_idx >= *source_output_size {
-                return Err(format!("Source output index {} out of range (max: {})", 
-                                 output_idx, source_output_size - 1));
+                return Err(format!(
+                    "Source output index {} out of range (max: {})",
+                    output_idx,
+                    source_output_size - 1
+                ));
             }
         }
 
@@ -79,15 +86,21 @@ impl NetworkComposer {
         let target_input_size = target_net.get_layers().first().unwrap();
         for &input_idx in &target_inputs {
             if input_idx >= *target_input_size {
-                return Err(format!("Target input index {} out of range (max: {})", 
-                                 input_idx, target_input_size - 1));
+                return Err(format!(
+                    "Target input index {} out of range (max: {})",
+                    input_idx,
+                    target_input_size - 1
+                ));
             }
         }
 
         // Validate connection sizes match
         if source_outputs.len() != target_inputs.len() {
-            return Err(format!("Connection size mismatch: {} outputs -> {} inputs", 
-                             source_outputs.len(), target_inputs.len()));
+            return Err(format!(
+                "Connection size mismatch: {} outputs -> {} inputs",
+                source_outputs.len(),
+                target_inputs.len()
+            ));
         }
 
         // Check for cycles (simple check - could be more sophisticated)
@@ -109,9 +122,12 @@ impl NetworkComposer {
     }
 
     /// Forward propagation through the entire network composition
-    pub fn forward(&mut self, inputs: &HashMap<String, Vec<f64>>) -> Result<HashMap<String, Vec<f64>>, String> {
+    pub fn forward(
+        &mut self,
+        inputs: &HashMap<String, Vec<f64>>,
+    ) -> Result<HashMap<String, Vec<f64>>, String> {
         let mut network_outputs: HashMap<String, Vec<f64>> = HashMap::new();
-        
+
         // Initialize with external inputs
         for (network_name, input_values) in inputs {
             if !self.networks.contains_key(network_name) {
@@ -123,28 +139,35 @@ impl NetworkComposer {
         // Execute networks in topological order
         for network_name in &self.execution_order {
             let network = self.networks.get_mut(network_name).unwrap();
-            
+
             // Prepare inputs for this network
             let mut network_inputs = vec![0.0; network.get_layers()[0]];
-            
+
             // Use external inputs if provided
             if let Some(external_inputs) = inputs.get(network_name) {
                 if external_inputs.len() != network_inputs.len() {
-                    return Err(format!("Input size mismatch for network '{}': expected {}, got {}", 
-                                     network_name, network_inputs.len(), external_inputs.len()));
+                    return Err(format!(
+                        "Input size mismatch for network '{}': expected {}, got {}",
+                        network_name,
+                        network_inputs.len(),
+                        external_inputs.len()
+                    ));
                 }
                 network_inputs = external_inputs.clone();
             }
-            
+
             // Apply connections from other networks
             for connection in &self.connections {
                 if connection.target_network == *network_name {
                     if let Some(source_outputs) = network_outputs.get(&connection.source_network) {
-                        for (&source_idx, &target_idx) in connection.source_outputs
+                        for (&source_idx, &target_idx) in connection
+                            .source_outputs
                             .iter()
-                            .zip(connection.target_inputs.iter()) 
+                            .zip(connection.target_inputs.iter())
                         {
-                            if source_idx < source_outputs.len() && target_idx < network_inputs.len() {
+                            if source_idx < source_outputs.len()
+                                && target_idx < network_inputs.len()
+                            {
                                 network_inputs[target_idx] = source_outputs[source_idx];
                             }
                         }
@@ -167,9 +190,11 @@ impl NetworkComposer {
         inputs: &[f64],
         targets: &[f64],
     ) -> Result<f64, String> {
-        let network = self.networks.get_mut(network_name)
+        let network = self
+            .networks
+            .get_mut(network_name)
             .ok_or_else(|| format!("Network '{}' not found", network_name))?;
-        
+
         Ok(network.train(inputs, targets))
     }
 
@@ -226,32 +251,37 @@ impl NetworkComposer {
 
     /// Get information about the composition
     pub fn info(&self) -> String {
-        let mut info = format!("Network Composition ({} networks, {} connections):\n", 
-                              self.networks.len(), self.connections.len());
-        
+        let mut info = format!(
+            "Network Composition ({} networks, {} connections):\n",
+            self.networks.len(),
+            self.connections.len()
+        );
+
         for network_name in &self.execution_order {
             if let Some(network) = self.networks.get(network_name) {
                 info.push_str(&format!("  {}: {}\n", network_name, network.info()));
             }
         }
-        
+
         if !self.connections.is_empty() {
             info.push_str("\nConnections:\n");
             for connection in &self.connections {
-                info.push_str(&format!("  {} -> {}: outputs{:?} -> inputs{:?}\n",
-                                     connection.source_network,
-                                     connection.target_network,
-                                     connection.source_outputs,
-                                     connection.target_inputs));
+                info.push_str(&format!(
+                    "  {} -> {}: outputs{:?} -> inputs{:?}\n",
+                    connection.source_network,
+                    connection.target_network,
+                    connection.source_outputs,
+                    connection.target_inputs
+                ));
             }
         }
-        
+
         info
     }
 
     /// Simple cycle detection (could be improved with proper graph algorithms)
     fn would_create_cycle(&self, source: &str, target: &str) -> bool {
-        // Simple check: if target can reach source through existing connections, 
+        // Simple check: if target can reach source through existing connections,
         // adding source->target would create a cycle
         self.can_reach(target, source)
     }
@@ -261,13 +291,16 @@ impl NetworkComposer {
         if from == to {
             return true;
         }
-        
+
         for connection in &self.connections {
-            if connection.source_network == from && (connection.target_network == to || self.can_reach(&connection.target_network, to)) {
+            if connection.source_network == from
+                && (connection.target_network == to
+                    || self.can_reach(&connection.target_network, to))
+            {
                 return true;
             }
         }
-        
+
         false
     }
 
@@ -298,7 +331,7 @@ impl NetworkComposer {
             // Cycle detected - for now, just continue
             return;
         }
-        
+
         if visited.contains(network_name) {
             return;
         }
@@ -366,13 +399,29 @@ mod tests {
         composer.add_network("target".to_string(), nn2).unwrap();
 
         // Valid connection
-        assert!(composer.connect_networks("source", "target", vec![0, 1], vec![0, 1]).is_ok());
+        assert!(
+            composer
+                .connect_networks("source", "target", vec![0, 1], vec![0, 1])
+                .is_ok()
+        );
         assert_eq!(composer.get_connections().len(), 1);
 
         // Invalid connections
-        assert!(composer.connect_networks("source", "target", vec![2], vec![0]).is_err()); // Out of range output
-        assert!(composer.connect_networks("source", "target", vec![0], vec![2]).is_err()); // Out of range input
-        assert!(composer.connect_networks("source", "target", vec![0, 1], vec![0]).is_err()); // Size mismatch
+        assert!(
+            composer
+                .connect_networks("source", "target", vec![2], vec![0])
+                .is_err()
+        ); // Out of range output
+        assert!(
+            composer
+                .connect_networks("source", "target", vec![0], vec![2])
+                .is_err()
+        ); // Out of range input
+        assert!(
+            composer
+                .connect_networks("source", "target", vec![0, 1], vec![0])
+                .is_err()
+        ); // Size mismatch
     }
 
     #[test]
@@ -383,7 +432,9 @@ mod tests {
 
         composer.add_network("net1".to_string(), nn1).unwrap();
         composer.add_network("net2".to_string(), nn2).unwrap();
-        composer.connect_networks("net1", "net2", vec![0], vec![0]).unwrap();
+        composer
+            .connect_networks("net1", "net2", vec![0], vec![0])
+            .unwrap();
 
         let mut inputs = HashMap::new();
         inputs.insert("net1".to_string(), vec![0.5, 0.8]);

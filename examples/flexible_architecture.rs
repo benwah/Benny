@@ -37,7 +37,7 @@ fn main() {
     let mut nn5 = NeuralNetwork::with_layers(&[4, 6, 3], 0.2);
     println!("Architecture: {}", nn5.info());
     println!("Parameters: {}", nn5.num_parameters());
-    
+
     // Train on some sample data
     println!("\nTraining on sample multi-class data...");
     let training_data = vec![
@@ -53,7 +53,11 @@ fn main() {
             total_error += nn5.train(inputs, targets);
         }
         if epoch % 200 == 0 {
-            println!("  Epoch {}: Average Error = {:.6}", epoch, total_error / training_data.len() as f64);
+            println!(
+                "  Epoch {}: Average Error = {:.6}",
+                epoch,
+                total_error / training_data.len() as f64
+            );
         }
     }
 
@@ -61,17 +65,26 @@ fn main() {
     println!("\nTesting predictions:");
     for (i, (inputs, expected)) in training_data.iter().enumerate() {
         let prediction = nn5.predict(inputs);
-        let predicted_class = prediction.iter()
+        let predicted_class = prediction
+            .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-            .unwrap().0;
-        let expected_class = expected.iter()
+            .unwrap()
+            .0;
+        let expected_class = expected
+            .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-            .unwrap().0;
-        
-        println!("  Sample {}: Input {:?} -> Predicted class {} (expected {})", 
-                 i + 1, inputs, predicted_class, expected_class);
+            .unwrap()
+            .0;
+
+        println!(
+            "  Sample {}: Input {:?} -> Predicted class {} (expected {})",
+            i + 1,
+            inputs,
+            predicted_class,
+            expected_class
+        );
     }
 
     println!("\n🎉 Demonstration complete!");
