@@ -72,8 +72,24 @@ path = "examples/network_serialization.rs"
 name = "neural_network_server"
 path = "examples/neural_network_server.rs"
 
+[[example]]
+name = "test_output_server"
+path = "examples/test_output_server.rs"
+
+[[example]]
+name = "neural_network_with_output"
+path = "examples/neural_network_with_output.rs"
+
+[[example]]
+name = "simple_output_test"
+path = "examples/simple_output_test.rs"
+
 [[bin]]
 name = "input_server"
 path = "src/bin/input_server.rs"
+
+[[bin]]
+name = "output_server"
+path = "src/bin/output_server.rs"
 
 

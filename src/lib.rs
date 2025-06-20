@@ -4,6 +4,7 @@ pub mod input_server;
 pub mod io_interface;
 pub mod network_composer;
 pub mod neural_network;
+pub mod output_server;
 pub mod runner;
 pub mod secure_network;
 pub mod server;
@@ -13,6 +14,9 @@ pub use distributed_network::{
 };
 pub use input_server::{
     InputServer, InputServerConfig, NetworkInfo, NeuralNetworkTarget, WebSocketMessage,
+};
+pub use output_server::{
+    OutputServer, OutputServerConfig, OutputNetworkInfo, NeuralNetworkSource, OutputWebSocketMessage,
 };
 pub use io_interface::{
     ExternalSinkConfig, ExternalSourceConfig, InputNode, IoConnectionId, IoError, IoNodeConfig,
