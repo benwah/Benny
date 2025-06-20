@@ -84,34 +84,85 @@ cargo run
 cargo test
 ```
 
-## Usage
+## 🎯 Usage
 
-### Basic Example (Backward Compatible)
+### 🧬 Hebbian Learning (Primary Approach)
+
+```rust
+use neural_network::{NeuralNetwork, HebbianLearningMode};
+
+// Create a network with Classic Hebbian learning
+let mut network = NeuralNetwork::new(2, 3, 1, 0.1);
+
+// Unsupervised learning with correlated patterns
+let patterns = [
+    [1.0, 1.0],  // Both high - should strengthen connections
+    [1.0, 0.8],  // High correlation
+    [0.9, 1.0],  // High correlation  
+    [0.0, 0.0],  // Both low
+];
+
+// Train with pure Hebbian learning (no targets needed!)
+for epoch in 0..50 {
+    for pattern in &patterns {
+        network.train_unsupervised(pattern);
+    }
+}
+
+// Check learned correlations
+let correlation = network.get_neuron_correlation(0, 0, 0, 1);
+println!("Learned correlation: {:.4}", correlation);
+```
+
+### 🔀 Hybrid Learning (Hebbian + Backpropagation)
 
 ```rust
 use neural_network::NeuralNetwork;
 
-// Create a neural network: 2 inputs, 4 hidden neurons, 1 output
-let mut nn = NeuralNetwork::new(2, 4, 1, 0.5);
+// Create a hybrid network combining both learning types
+let mut network = NeuralNetwork::with_hybrid_learning(&[2, 4, 1], 0.05, 0.3);
 
-// Training data for XOR problem
-let training_data = vec![
-    (vec![0.0, 0.0], vec![0.0]),
-    (vec![0.0, 1.0], vec![1.0]),
-    (vec![1.0, 0.0], vec![1.0]),
-    (vec![1.0, 1.0], vec![0.0]),
+// XOR problem with hybrid learning
+let xor_data = [
+    ([0.0, 0.0], [0.0]),
+    ([0.0, 1.0], [1.0]),
+    ([1.0, 0.0], [1.0]),
+    ([1.0, 1.0], [0.0]),
 ];
 
-// Train the network
-for epoch in 0..10000 {
-    for (inputs, targets) in &training_data {
-        nn.train(inputs, targets);
+// Train with both Hebbian and supervised learning
+for epoch in 0..1000 {
+    for (inputs, targets) in &xor_data {
+        let error = network.train(inputs, targets);
     }
 }
+```
 
-// Make predictions
-let prediction = nn.predict(&[1.0, 0.0]);
-println!("Prediction: {:.4}", prediction[0]);
+### 🎛️ Different Hebbian Learning Modes
+
+```rust
+use neural_network::{NeuralNetwork, HebbianLearningMode};
+
+// Competitive learning (winner-take-all)
+let mut competitive_net = NeuralNetwork::with_layers_and_mode(
+    &[10, 5, 2], 
+    0.1, 
+    HebbianLearningMode::Competitive
+);
+
+// Oja's rule (normalized Hebbian learning)
+let mut oja_net = NeuralNetwork::with_layers_and_mode(
+    &[8, 4, 1], 
+    0.05, 
+    HebbianLearningMode::Oja
+);
+
+// Anti-Hebbian learning (decorrelation)
+let mut anti_net = NeuralNetwork::with_layers_and_mode(
+    &[6, 3, 2], 
+    0.02, 
+    HebbianLearningMode::AntiHebbian
+);
 ```
 
 ### Flexible Architecture Examples
@@ -139,19 +190,36 @@ println!("Hidden layers: {}", nn2.num_hidden_layers());
 
 ## Neural Network API
 
-### Constructors
+### 🏗️ Constructors (Hebbian-Centric)
 
 ```rust
-// Simple constructor (backward compatible)
-NeuralNetwork::new(input_size: usize, hidden_size: usize, output_size: usize, learning_rate: f64)
+// Default Classic Hebbian learning
+NeuralNetwork::new(input_size: usize, hidden_size: usize, output_size: usize, hebbian_rate: f64)
 
-// Flexible constructor for any architecture
-NeuralNetwork::with_layers(layer_sizes: &[usize], learning_rate: f64)
+// Specify Hebbian learning mode
+NeuralNetwork::new_with_mode(input_size: usize, hidden_size: usize, output_size: usize, 
+                            hebbian_rate: f64, mode: HebbianLearningMode)
+
+// Multi-layer Classic Hebbian
+NeuralNetwork::with_layers(layer_sizes: &[usize], hebbian_rate: f64)
+
+// Multi-layer with mode selection
+NeuralNetwork::with_layers_and_mode(layer_sizes: &[usize], hebbian_rate: f64, mode: HebbianLearningMode)
+
+// Hybrid Hebbian + Backpropagation
+NeuralNetwork::with_hybrid_learning(layer_sizes: &[usize], hebbian_rate: f64, backprop_rate: f64)
 ```
 
-### Core Methods
+### 🧬 Hebbian Learning Methods
 
-- `train(&mut self, inputs: &[f64], targets: &[f64]) -> f64`: Train the network with input-target pairs, returns error
+- `train(&mut self, inputs: &[f64], targets: &[f64]) -> f64`: Primary training method (Hebbian + optional backprop)
+- `train_unsupervised(&mut self, inputs: &[f64])`: Pure Hebbian learning without targets
+- `get_neuron_correlation(&self, layer: usize, neuron1: usize, neuron2: usize) -> f64`: Analyze neuron relationships
+- `get_average_activation(&self, layer: usize, neuron: usize) -> f64`: Monitor network dynamics
+- `get_hebbian_rate(&self) -> f64`: Access Hebbian learning rate
+
+### 🎯 Core Methods
+
 - `predict(&self, inputs: &[f64]) -> Vec<f64>`: Make predictions using the trained network
 - `forward(&self, inputs: &[f64]) -> (Vec<f64>, Vec<f64>)`: Perform forward propagation (returns hidden and output activations)
 - `forward_all_layers(&self, inputs: &[f64]) -> Vec<Vec<f64>>`: Get activations from all layers
@@ -168,6 +236,50 @@ NeuralNetwork::with_layers(layer_sizes: &[usize], learning_rate: f64)
 
 - `train_batch(&mut self, batch: &[(Vec<f64>, Vec<f64>)]) -> f64`: Train on multiple samples in parallel
 - `forward_batch(&self, inputs_batch: &[Vec<f64>]) -> Vec<Vec<f64>>`: Process multiple inputs in parallel
+
+## 🎮 Examples
+
+### Run the Examples
+
+```bash
+# Simple Hebbian learning demonstration
+cargo run --example simple_hebbian
+
+# Comprehensive Hebbian learning showcase
+cargo run --example hebbian_learning
+
+# Multi-core performance demonstration
+cargo run --example multi_core_performance
+
+# Basic neural network examples
+cargo run
+```
+
+### Example Outputs
+
+**Simple Hebbian Learning:**
+```
+🧠 Simple Hebbian Neural Network in Rust
+=========================================
+
+📊 Network Info: Neural Network: 2 -> 3 -> 1 (Hebbian rate: 0.1, mode: Classic)
+
+🎯 Training with unsupervised Hebbian learning...
+  Epoch 0: Output for [1.0, 1.0] = 0.3640
+  Epoch 10: Output for [1.0, 1.0] = 0.9980
+  Epoch 20: Output for [1.0, 1.0] = 1.0000
+
+🔗 Final neuron correlations:
+  Input[0] <-> Input[1]: 0.9660
+
+✨ Hebbian learning complete! Neurons that fired together are now wired together.
+```
+
+**Hebbian Learning Showcase:**
+- Demonstrates all 6 Hebbian learning modes
+- Shows correlation analysis and neuron dynamics
+- Compares pure Hebbian vs hybrid learning approaches
+- Includes biological insights and learning principles
 
 ## Multi-Core Performance
 
@@ -451,19 +563,60 @@ Tests cover:
 - Forward propagation
 - Prediction functionality
 
+## 🧬 Biological Inspiration
+
+This neural network implementation is inspired by real biological neural networks and implements several key principles from neuroscience:
+
+### 🔬 Hebbian Learning Principle
+
+> *"Neurons that fire together, wire together"* - Donald Hebb (1949)
+
+This fundamental principle of synaptic plasticity is the core of our implementation. When two neurons are active simultaneously, the connection between them strengthens, leading to associative learning without external supervision.
+
+### 🧠 Synaptic Plasticity Mechanisms
+
+- **Long-Term Potentiation (LTP)**: Strengthening of synapses based on recent patterns of activity
+- **Long-Term Depression (LTD)**: Weakening of synapses to prevent saturation
+- **Homeostatic Plasticity**: Regulation of overall neural activity to maintain stability
+- **Competitive Learning**: Winner-take-all dynamics similar to cortical columns
+
+### 🔄 Learning Without Teachers
+
+Unlike traditional backpropagation which requires labeled data, Hebbian learning enables:
+- **Unsupervised Learning**: Pattern recognition without explicit targets
+- **Self-Organization**: Emergence of structure from input statistics
+- **Correlation Detection**: Automatic discovery of input relationships
+- **Feature Learning**: Development of useful representations
+
+### 🌟 Modern Neuroscience Integration
+
+Our implementation incorporates recent findings from neuroscience:
+- **BCM Rule**: Sliding threshold for bidirectional plasticity
+- **Oja's Rule**: Normalized learning to prevent weight explosion
+- **Anti-Hebbian Learning**: Decorrelation mechanisms for efficient coding
+- **Homeostatic Regulation**: Activity-dependent scaling for stability
+
+This makes the network not just a computational tool, but a model of how biological brains actually learn and adapt.
+
 ## Future Enhancements
 
-Potential improvements for this simple neural network:
+Potential improvements for this Hebbian neural network:
 
-- [ ] Multiple hidden layers (deep networks)
+- [x] **Multiple hidden layers** (deep networks) ✅ Implemented
+- [x] **Hebbian learning mechanisms** ✅ 6 different modes implemented
+- [x] **Multi-core optimization** ✅ Parallel processing with Rayon
+- [x] **Batch training support** ✅ Parallel batch processing
+- [x] **Correlation analysis** ✅ Neuron relationship tracking
 - [ ] Different activation functions (ReLU, tanh, etc.)
 - [ ] Different optimization algorithms (Adam, RMSprop)
-- [ ] Batch training support
 - [ ] Regularization techniques (dropout, L1/L2)
 - [ ] Save/load trained models
 - [ ] More complex datasets (MNIST, etc.)
-- [ ] GPU acceleration
-- [ ] Convolutional layers
+- [ ] GPU acceleration with CUDA
+- [ ] Convolutional layers with Hebbian learning
+- [ ] Spike-timing dependent plasticity (STDP)
+- [ ] Neuromodulation mechanisms (dopamine, etc.)
+- [ ] Recurrent connections and memory
 
 ## License
 
