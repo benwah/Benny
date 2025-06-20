@@ -12,6 +12,7 @@ pub use network_composer::{NetworkComposer, NetworkConnection};
 pub use distributed_network::{DistributedNetwork, NetworkMessage, MessagePayload, MessageType, ProtocolError, capabilities};
 pub use secure_network::{SecureDistributedNetwork, NetworkCertificate, TlsConfig, SecureNetworkError};
 pub use io_interface::{
-    InputInterface, OutputInterface, IoManager, IoData, IoConfig, IoError,
-    TcpInputInterface, TcpOutputInterface, IoConnectionId
+    InputNode, OutputNode, SecureInputNode, SecureOutputNode,
+    IoNodeConfig, IoError, ExternalSourceConfig, ExternalSinkConfig,
+    IoConnectionId
 };
