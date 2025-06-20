@@ -1,8 +1,29 @@
-# 🧠 Simple Neural Network in Rust
+# 🧠 Hebbian Neural Network in Rust
 
-A basic implementation of a feedforward neural network written in Rust from scratch. This project demonstrates fundamental concepts of neural networks including forward propagation, backpropagation, and gradient descent.
+A biologically-inspired neural network implementation in Rust that makes **Hebbian learning** the central organizing principle. This project demonstrates both classical backpropagation and modern understanding of synaptic plasticity with the famous principle: *"Neurons that fire together, wire together"*.
 
-## Features
+## 🌟 Core Philosophy
+
+This neural network is built around **Hebbian learning** as the primary learning mechanism, with backpropagation as an optional supplement. This reflects modern neuroscience understanding that biological neural networks primarily learn through correlation-based synaptic plasticity.
+
+## 🧬 Hebbian Learning Features
+
+- **6 Hebbian Learning Modes**:
+  - **Classic**: Traditional Hebbian learning (Δw = η × pre × post)
+  - **Competitive**: Winner-take-all dynamics with lateral inhibition
+  - **Oja**: Normalized Hebbian learning with weight decay
+  - **BCM**: Bienenstock-Cooper-Munro rule with sliding threshold
+  - **AntiHebbian**: Negative correlation learning for decorrelation
+  - **Hybrid**: Combined Hebbian + backpropagation learning
+
+- **Biological Mechanisms**:
+  - Correlation matrix tracking for neuron relationships
+  - Homeostatic regulation to prevent runaway activation
+  - Anti-Hebbian mechanisms for competitive learning
+  - Temporal correlation analysis through activation history
+  - Weight decay for synaptic stability
+
+## 🚀 Performance Features
 
 - **Multi-Core Optimization**: Utilizes all CPU cores for parallel processing
   - Parallel forward propagation across neurons within layers
@@ -11,18 +32,6 @@ A basic implementation of a feedforward neural network written in Rust from scra
   - Optimized matrix operations using Rayon for maximum performance
 - **Flexible Architecture**: Support for any number of layers and neurons per layer
 - **Network Composition**: Connect multiple neural networks together in complex architectures
-- **Hebbian Learning**: Biologically-inspired "neurons that fire together, wire together" learning
-- **Activation History**: Track neuron activations over time for correlation-based learning
-- **Hybrid Training**: Combine backpropagation with Hebbian learning for enhanced performance
-- **Multiple Constructors**: Simple `new()` for basic networks, `with_layers()` for complex architectures, `with_hebbian_learning()` for bio-inspired networks
-- **Deep Networks**: Support for multiple hidden layers of varying sizes
-- **Multi-Input/Output**: Handle complex classification and regression problems
-- **Sigmoid Activation**: Uses sigmoid activation function with its derivative
-- **Backpropagation**: Implements backpropagation algorithm for training
-- **Multiple Problems**: Demonstrates solving XOR, AND, OR logic problems and flexible architectures
-- **Modular Design**: Clean separation between neural network implementation and examples
-- **Parameter Analysis**: Built-in methods to count parameters and analyze network complexity
-- **Unit Tests**: Comprehensive test coverage for core functionality
 
 ## Architecture
 
