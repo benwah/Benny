@@ -1,4 +1,4 @@
-use neural_network::{NeuralNetwork, DistributedNetwork, HebbianLearningMode, capabilities};
+use neural_network::{NeuralNetwork, DistributedNetwork, HebbianLearningMode};
 use tokio::time::{sleep, Duration};
 
 #[tokio::main]
@@ -186,16 +186,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// Helper function to demonstrate protocol efficiency
-fn calculate_protocol_overhead() {
-    println!("📈 Protocol Efficiency Analysis:");
-    println!("   Header overhead: 22 bytes per message");
-    println!("   Float data: 4 bytes per f32 value");
-    println!("   String data: 1 byte length + UTF-8 bytes");
-    println!("   UUID: 16 bytes");
-    println!("   Typical message sizes:");
-    println!("     • Handshake: ~50-100 bytes");
-    println!("     • Forward data (100 neurons): ~422 bytes");
-    println!("     • Hebbian data (50 correlations): ~222 bytes");
-    println!("     • Heartbeat: 30 bytes");
-}

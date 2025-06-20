@@ -63,7 +63,7 @@ fn main() {
     println!("==============================================\n");
     
     // Create a traditional network (no online learning)
-    let mut traditional_network = NeuralNetwork::with_layers_and_mode(
+    let traditional_network = NeuralNetwork::with_layers_and_mode(
         &[2, 4, 1], 
         0.05, 
         HebbianLearningMode::Classic

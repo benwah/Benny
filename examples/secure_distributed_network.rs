@@ -13,7 +13,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Generate test certificates for demonstration
     println!("🏛️  Setting up Certificate Authority...");
-    let (ca_cert, ca_key) = cert_utils::create_neural_ca(
+    let (_ca_cert, _ca_key) = cert_utils::create_neural_ca(
         "Neural Network Research CA",
         "Distributed AI Research Consortium"
     )?;
@@ -27,14 +27,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let alpha_id = Uuid::new_v4();
     let beta_id = Uuid::new_v4();
     
-    let (alpha_cert_pem, alpha_key_pem) = cert_utils::generate_test_certificate(
+    let (alpha_cert_pem, _alpha_key_pem) = cert_utils::generate_test_certificate(
         alpha_id,
         "alpha-neural-net.research.edu",
         "University Research Lab",
         capabilities::FORWARD_PROPAGATION | capabilities::HEBBIAN_LEARNING | capabilities::REAL_TIME
     )?;
     
-    let (beta_cert_pem, beta_key_pem) = cert_utils::generate_test_certificate(
+    let (beta_cert_pem, _beta_key_pem) = cert_utils::generate_test_certificate(
         beta_id,
         "beta-neural-net.hospital.org", 
         "Medical AI Research Center",
@@ -97,13 +97,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Create neural networks
-    let alpha_network = NeuralNetwork::with_layers_and_mode(
+    let _alpha_network = NeuralNetwork::with_layers_and_mode(
         &[3, 6, 2], 
         0.1, 
         HebbianLearningMode::Classic
     );
     
-    let beta_network = NeuralNetwork::with_layers_and_mode(
+    let _beta_network = NeuralNetwork::with_layers_and_mode(
         &[2, 4, 1], 
         0.1, 
         HebbianLearningMode::Competitive
@@ -232,49 +232,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Demonstrate certificate generation for different network types
-fn demonstrate_certificate_types() -> Result<(), Box<dyn std::error::Error>> {
-    println!("📜 Neural Network Certificate Types:");
-    println!();
-
-    // Research network certificate
-    let research_id = Uuid::new_v4();
-    let (research_cert, _) = cert_utils::generate_test_certificate(
-        research_id,
-        "research-cluster.university.edu",
-        "AI Research Consortium",
-        capabilities::FORWARD_PROPAGATION | 
-        capabilities::BACKPROPAGATION | 
-        capabilities::HEBBIAN_LEARNING |
-        capabilities::CORRELATION_ANALYSIS |
-        capabilities::MULTI_LAYER
-    )?;
-
-    // Medical network certificate  
-    let medical_id = Uuid::new_v4();
-    let (medical_cert, _) = cert_utils::generate_test_certificate(
-        medical_id,
-        "medical-ai.hospital.org",
-        "Healthcare AI Network",
-        capabilities::FORWARD_PROPAGATION | 
-        capabilities::HEBBIAN_LEARNING |
-        capabilities::REAL_TIME
-    )?;
-
-    // Edge device certificate
-    let edge_id = Uuid::new_v4();
-    let (edge_cert, _) = cert_utils::generate_test_certificate(
-        edge_id,
-        "edge-device-001.iot.company.com",
-        "IoT Edge Computing",
-        capabilities::FORWARD_PROPAGATION |
-        capabilities::REAL_TIME
-    )?;
-
-    println!("✅ Generated certificates for different deployment scenarios");
-    println!("   • Research: Full capabilities for experimentation");
-    println!("   • Medical: Privacy-focused with real-time constraints");
-    println!("   • Edge: Lightweight for resource-constrained devices");
-
-    Ok(())
-}

@@ -523,7 +523,7 @@ pub mod cert_utils {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::neural_network::HebbianLearningMode;
+
 
     #[test]
     fn test_certificate_capabilities() {
