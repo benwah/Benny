@@ -381,6 +381,9 @@ cargo run --example benchmark_parallel
 
 # Distributed neural network protocol demo
 cargo run --example distributed_network
+
+# Secure distributed network with TLS and certificates
+cargo run --example secure_distributed_network
 ```
 
 ## Hebbian Learning
@@ -532,6 +535,36 @@ println!("Classification: {:?}", outputs["classifier"]);
 - **Individual Training**: Train specific networks within the composition
 - **Validation**: Comprehensive error checking for network sizes and connection validity
 
+## Distributed Networking
+
+The neural network supports distributed computing across multiple nodes with an optimized binary protocol and enterprise-grade security:
+
+### Neural Network Protocol (NNP)
+
+- **Binary Protocol**: Efficient 22-byte header with magic number, version, message type, length, sequence, and CRC32 checksum
+- **Message Types**: Handshake, data forwarding, Hebbian learning synchronization, heartbeat, and error handling
+- **TCP Communication**: Async networking with Tokio for high-performance distributed training
+- **Network Discovery**: Automatic peer discovery and connection management
+- **Load Balancing**: Intelligent distribution of computational workload
+
+### Security Features
+
+- **TLS 1.3 Encryption**: End-to-end encryption for all network communication
+- **Certificate-based Authentication**: X.509 certificates with neural network-specific extensions
+- **Capability Authorization**: Fine-grained permissions based on certificate capabilities
+- **Network Identity Verification**: UUID-based network identification with certificate validation
+- **Certificate Authority Support**: Full CA infrastructure for enterprise deployment
+
+### Protocol Features
+
+- **Reliability**: CRC32 checksums ensure data integrity
+- **Versioning**: Protocol version negotiation for compatibility
+- **Scalability**: Supports large-scale distributed neural networks
+- **Performance**: Optimized binary serialization for minimal overhead
+- **Security**: Enterprise-grade TLS encryption and certificate-based authentication
+
+See [DISTRIBUTED_NETWORKING.md](DISTRIBUTED_NETWORKING.md) for complete protocol specification and [SECURITY.md](SECURITY.md) for security architecture details.
+
 ## Examples
 
 Run the examples to see the neural network in action:
@@ -539,6 +572,9 @@ Run the examples to see the neural network in action:
 ```bash
 # Main demo with flexible architectures and logic problems
 cargo run
+
+# Simple neural network demo
+cargo run --example simple_neural_network
 
 # Simple XOR example
 cargo run --example simple_example
