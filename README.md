@@ -237,6 +237,50 @@ NeuralNetwork::with_hybrid_learning(layer_sizes: &[usize], hebbian_rate: f64, ba
 - `train_batch(&mut self, batch: &[(Vec<f64>, Vec<f64>)]) -> f64`: Train on multiple samples in parallel
 - `forward_batch(&self, inputs_batch: &[Vec<f64>]) -> Vec<Vec<f64>>`: Process multiple inputs in parallel
 
+## 🌐 Distributed Neural Networks
+
+This library includes a revolutionary **Neural Network Protocol (NNP)** - an optimized binary TCP protocol designed specifically for real-time neural network communication across the internet.
+
+### Key Features
+
+- **🚀 High Performance**: Binary protocol with minimal 22-byte headers
+- **🔒 Data Integrity**: CRC32 checksums and message sequencing
+- **🌍 Internet Scale**: TCP-based for reliable communication across networks
+- **🧬 Neural Optimized**: Specialized for forward/backward propagation and Hebbian data
+- **⚡ Real-time**: f32 precision and optimized serialization for speed
+
+### Protocol Capabilities
+
+```rust
+// Create distributed neural network nodes
+let (dist_net, receiver) = DistributedNetwork::new(
+    "MyNetwork".to_string(),
+    "0.0.0.0".to_string(),
+    8080,
+    neural_network,
+);
+
+// Start server for incoming connections
+dist_net.start_server().await?;
+
+// Connect to remote neural network
+let peer_id = dist_net.connect_to("192.168.1.100", 8080).await?;
+
+// Send neural data across the network
+dist_net.send_forward_data(peer_id, layer_id, data).await?;
+dist_net.send_hebbian_data(peer_id, layer_id, correlations, learning_rate).await?;
+```
+
+### Use Cases
+
+- **Federated Learning**: Train on distributed data while preserving privacy
+- **Pipeline Processing**: Different layers on different machines
+- **Ensemble Networks**: Multiple networks collaborating on same problem
+- **Edge Computing**: Coordinate neural networks across IoT devices
+- **Research Clusters**: Connect neural networks across institutions
+
+See [DISTRIBUTED_NETWORKING.md](DISTRIBUTED_NETWORKING.md) for complete protocol specification and examples.
+
 ## 🎮 Examples
 
 ### Run the Examples
@@ -334,6 +378,9 @@ cargo run --example multi_core_performance
 
 # Detailed benchmarks
 cargo run --example benchmark_parallel
+
+# Distributed neural network protocol demo
+cargo run --example distributed_network
 ```
 
 ## Hebbian Learning
@@ -607,6 +654,7 @@ Potential improvements for this Hebbian neural network:
 - [x] **Multi-core optimization** ✅ Parallel processing with Rayon
 - [x] **Batch training support** ✅ Parallel batch processing
 - [x] **Correlation analysis** ✅ Neuron relationship tracking
+- [x] **Distributed networking** ✅ Optimized TCP protocol for internet-scale neural networks
 - [ ] Different activation functions (ReLU, tanh, etc.)
 - [ ] Different optimization algorithms (Adam, RMSprop)
 - [ ] Regularization techniques (dropout, L1/L2)
