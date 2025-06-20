@@ -23,13 +23,20 @@
 - **Protocols**: TCP, SSL/TLS with certificate authentication
 - **Use Cases**: IoT integration, API processing, enterprise systems
 
-### 4. Input Server (`src/input_server.rs` + `src/bin/input_server.rs`)
+### 4. Neural Network Server (`src/server.rs`)
+- **Purpose**: Daemon process that binds neural network inputs/outputs to other Neural Network Server instances
+- **Architecture**: Uses DistributedNetwork infrastructure with NNP protocol
+- **Features**: Network-to-network communication, distributed neural processing
+- **Protocol**: Binary NNP protocol for efficient neural data exchange
+- **Use Cases**: Multi-node neural networks, distributed AI processing
+
+### 5. Input Server (`src/input_server.rs` + `src/bin/input_server.rs`)
 - **Purpose**: Web-based interface for manually activating neural network inputs
 - **Architecture**: HTTP server + WebSocket for real-time communication
 - **Features**: Browser-based input controls, real-time feedback
 - **Ports**: HTTP (default 8000), WebSocket (default 8001)
 
-### 5. Output Server (`src/output_server.rs` + `src/bin/output_server.rs`) ⭐ **NEWLY ADDED**
+### 6. Output Server (`src/output_server.rs` + `src/bin/output_server.rs`) ⭐ **NEWLY ADDED**
 - **Purpose**: Real-time visualization of neural network outputs via web dashboard
 - **Architecture**: TCP server (neural networks) + HTTP/WebSocket (web interface)
 - **Features**: Live charts, activity logging, multi-network monitoring
@@ -66,23 +73,72 @@ static/                       # Web interface assets
 # Training
 cargo run -- train -c config.toml -d data.json -o model.bin
 
-# Server mode
+# Server mode (Neural Network Server daemon)
 cargo run -- server -m model.bin -p 8080
 
 # Interactive mode
 cargo run -- interactive -c config.toml
 ```
 
-### 2. Input Server (`cargo run --bin input_server`)
+### 2. Neural Network Server (via main CLI or examples)
+```bash
+# Start neural network server daemon (distributed neural processing)
+cargo run -- server -m model.bin -p 8001 --daemon
+
+# Or run example neural network server
+cargo run --example neural_network_server
+```
+
+### 3. Input Server (`cargo run --bin input_server`)
 ```bash
 # Start input server for manual neural network input control
 cargo run --bin input_server --listen-port 8000 --web-port 8001
 ```
 
-### 3. Output Server (`cargo run --bin output_server`) ⭐ **NEW**
+### 4. Output Server (`cargo run --bin output_server`) ⭐ **NEW**
 ```bash
 # Start output server for real-time neural network output visualization
 cargo run --bin output_server --listen-port 8002 --web-port 12000 --websocket-port 12001
+```
+
+## Three-Server Architecture
+
+This repository implements a comprehensive three-server architecture for neural network operations:
+
+### 1. Neural Network Server (Core Processing)
+- **Purpose**: Distributed neural network processing daemon
+- **Communication**: Neural Network Protocol (NNP) - binary protocol
+- **Connections**: Network-to-network (neural data exchange)
+- **Example**: `cargo run --example neural_network_server`
+- **Use Case**: Multi-node neural networks, distributed AI processing
+
+### 2. Input Server (Manual Control)
+- **Purpose**: Web-based manual input control for neural networks
+- **Communication**: HTTP + WebSocket for browser interface
+- **Connections**: Browser → Neural Network inputs
+- **Binary**: `cargo run --bin input_server`
+- **Use Case**: Manual testing, debugging, interactive control
+
+### 3. Output Server (Visualization)
+- **Purpose**: Real-time visualization of neural network outputs
+- **Communication**: TCP (JSON) + HTTP/WebSocket for browser
+- **Connections**: Neural Network outputs → Browser dashboard
+- **Binary**: `cargo run --bin output_server`
+- **Use Case**: Monitoring, debugging, real-time visualization
+
+### Complete Workflow Example
+```bash
+# Terminal 1: Start neural network server (processing)
+cargo run --example neural_network_server
+
+# Terminal 2: Start input server (manual control)
+cargo run --bin input_server
+
+# Terminal 3: Start output server (visualization)
+cargo run --bin output_server
+
+# Browser 1: http://localhost:8000 (input control)
+# Browser 2: http://localhost:12000 (output visualization)
 ```
 
 ## Common Development Tasks
