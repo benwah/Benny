@@ -43,6 +43,13 @@
 - **Ports**: TCP (default 8002), HTTP (default 12000), WebSocket (default 12001)
 - **Protocol**: JSON-based output data transmission
 
+### 7. Docker Topology Testing System (`docker/` + topology tools) 🐳 **NEW**
+- **Purpose**: Comprehensive Docker containerization for testing distributed neural network topologies
+- **Architecture**: Multi-container deployments with Docker Compose orchestration
+- **Topologies**: Linear (3 nodes), Star (1 hub + 4 nodes), Mesh (4 nodes), Ring (4 nodes)
+- **Tools**: Automated testing, real-time monitoring, performance validation
+- **Management**: Unified `neural-topology.sh` script for deployment and testing
+
 ## Project Structure
 
 ```
@@ -61,10 +68,29 @@ src/
 ├── runner.rs                 # Training and execution runner
 └── bin/
     ├── input_server.rs       # Input server CLI binary
-    └── output_server.rs      # Output server CLI binary ⭐ NEW
+    ├── output_server.rs      # Output server CLI binary ⭐ NEW
+    ├── topology_tester.rs    # Topology testing tool 🐳 NEW
+    └── topology_monitor.rs   # Topology monitoring dashboard 🐳 NEW
+
+docker/                       # Docker containerization system 🐳 NEW
+├── README.md                 # Docker setup and usage guide
+├── neural-topology.sh        # Unified management script
+├── config/                   # Default configurations
+│   └── default.toml          # Neural network configuration
+└── topologies/               # Docker Compose configurations
+    ├── linear.yml            # Linear topology (3 nodes)
+    ├── star.yml              # Star topology (1 hub + 4 nodes)
+    ├── mesh.yml              # Mesh topology (4 nodes)
+    └── ring.yml              # Ring topology (4 nodes)
 
 examples/                     # Comprehensive example collection
 static/                       # Web interface assets
+├── index.html                # Input server web interface
+└── topology_monitor.html     # Topology monitoring dashboard 🐳 NEW
+
+Dockerfile                    # Multi-purpose neural network container 🐳 NEW
+Dockerfile.server             # Specialized neural network server container 🐳 NEW
+DOCKER_TOPOLOGY_TESTING.md    # Comprehensive Docker documentation 🐳 NEW
 ```
 
 ## Key Binaries
@@ -102,6 +128,33 @@ cargo run --bin input_server --listen-port 8000 --web-port 8001
 cargo run --bin output_server --listen-port 8002 --web-port 12000 --websocket-port 12001
 ```
 
+### 5. Topology Tester (`cargo run --bin topology_tester`) 🐳 **NEW**
+```bash
+# Test distributed neural network topologies with automated data injection
+cargo run --bin topology_tester --topology linear --duration 60 --rate 1.0
+```
+
+### 6. Topology Monitor (`cargo run --bin topology_monitor`) 🐳 **NEW**
+```bash
+# Start web-based monitoring dashboard for topology visualization
+cargo run --bin topology_monitor --port 3000
+```
+
+### 7. Docker Topology Management 🐳 **NEW**
+```bash
+# Build Docker images
+cd docker && ./neural-topology.sh build
+
+# Start topology
+./neural-topology.sh start linear
+
+# Test topology
+./neural-topology.sh test star -d 120 -r 2.0
+
+# Monitor topology
+./neural-topology.sh monitor
+```
+
 ## Common Development Tasks
 
 ### Building and Testing
@@ -120,6 +173,9 @@ cargo run --example neural_network_server
 
 # Test output server with sample data
 cargo run --example simple_output_test
+
+# Test Docker topology system
+cd docker && ./neural-topology.sh build && ./neural-topology.sh start linear
 ```
 
 ### Working with Neural Networks
@@ -208,35 +264,124 @@ let json_data = serde_json::to_string(&outputs)?;
 stream.write_all(json_data.as_bytes())?;
 ```
 
+### Working with Docker Topology Testing 🐳 **NEW**
+```bash
+# Quick start with linear topology
+cd docker
+./neural-topology.sh build
+./neural-topology.sh start linear
+./neural-topology.sh test linear
+
+# Advanced testing with custom parameters
+./neural-topology.sh test star -d 120 -r 2.0 -p sine
+
+# Real-time monitoring
+./neural-topology.sh monitor
+
+# View logs and status
+./neural-topology.sh status
+./neural-topology.sh logs linear
+
+# Clean up
+./neural-topology.sh stop linear
+./neural-topology.sh clean
+```
+
 ## Configuration Files
 
 ### Network Configuration (`config.toml`)
 ```toml
-[network]
-type = "feedforward"
-layers = [2, 4, 1]
-learning_rate = 0.1
+# Network architecture
+architecture = [4, 8, 4, 1]
+learning_rate = 0.01
+hebbian_mode = "Classic"
 hebbian_rate = 0.05
-mode = "Classic"
+anti_hebbian_rate = 0.01
+decay_rate = 0.001
+homeostatic_rate = 0.001
+target_activity = 0.5
+history_size = 100
+use_backprop = true
+backprop_rate = 0.01
+online_learning = true
 
 [training]
-epochs = 1000
 batch_size = 32
+print_interval = 100
+early_stop_threshold = 0.001
+early_stop_patience = 50
+validation_split = 0.2
 
 [distributed]
 enable = true
 port = 8080
-security = "tls"
+security = "none"
+timeout_ms = 5000
+buffer_size = 1024
+
+[server]
+name = "neural-server"
+address = "0.0.0.0"
+hebbian_learning = true
+daemon_mode = true
 ```
 
 ### Training Data (`data.json`)
 ```json
 {
-  "samples": [
-    {"inputs": [0.0, 0.0], "targets": [0.0]},
-    {"inputs": [0.0, 1.0], "targets": [1.0]}
+  "inputs": [
+    [0.0, 0.0],
+    [0.0, 1.0],
+    [1.0, 0.0],
+    [1.0, 1.0]
+  ],
+  "targets": [
+    [0.0],
+    [1.0],
+    [1.0],
+    [0.0]
   ]
 }
+```
+
+### Docker Compose Configuration (`docker/topologies/linear.yml`) 🐳 **NEW**
+```yaml
+services:
+  neural-node-1:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.server
+    environment:
+      NEURAL_NODE_NAME: node-1
+      NEURAL_OUTPUTS: neural-node-2:8080
+    ports: ["8081:8080"]
+    volumes: ["../config:/app/config:ro"]
+    networks: [neural-net]
+
+  neural-node-2:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.server
+    environment:
+      NEURAL_NODE_NAME: node-2
+      NEURAL_OUTPUTS: neural-node-3:8080
+    ports: ["8082:8080"]
+    volumes: ["../config:/app/config:ro"]
+    networks: [neural-net]
+
+  neural-node-3:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.server
+    environment:
+      NEURAL_NODE_NAME: node-3
+    ports: ["8083:8080"]
+    volumes: ["../config:/app/config:ro"]
+    networks: [neural-net]
+
+networks:
+  neural-net:
+    driver: bridge
 ```
 
 ## Important Dependencies
@@ -271,24 +416,49 @@ security = "tls"
 - **Configuration**: Use TOML for complex configs, CLI args for simple options
 - **Serialization**: JSON for external APIs, bincode for internal protocols
 
-## Recent Major Addition: Output Server ⭐
+## Recent Major Additions
 
+### Output Server ⭐
 The Output Server is a recently implemented system that provides real-time visualization of neural network outputs through a web dashboard.
 
-### Architecture
+### Docker Topology Testing System 🐳 **NEW**
+A comprehensive Docker containerization system for testing distributed neural network topologies with automated deployment, testing, and monitoring capabilities.
+
+#### Docker System Architecture
+```
+Management Script → Docker Compose → Neural Network Containers → NNP Protocol
+       ↓                ↓                      ↓                    ↓
+neural-topology.sh → topology.yml → neural-network-server → TCP:8080-8084
+       ↓                ↓                      ↓                    ↓
+   Build/Test → Container Orchestration → Distributed Topology → Inter-node Comm
+       ↓                ↓                      ↓                    ↓
+   Monitor → Web Dashboard → Real-time Metrics → Performance Data
+```
+
+#### Output Server Architecture
 ```
 Neural Network → TCP:8002 → OutputServer → WebSocket:12001 → Browser
                                 ↓
                            HTTP:12000 → Web Dashboard
 ```
 
-### Key Files
+#### Key Files - Output Server
 - `src/output_server.rs`: Main server implementation
 - `src/bin/output_server.rs`: CLI binary
 - `examples/simple_output_test.rs`: Test client
 - `examples/neural_network_with_output.rs`: Integration example
 
-### Usage
+#### Key Files - Docker Topology System 🐳 **NEW**
+- `docker/neural-topology.sh`: Unified management script
+- `docker/topologies/*.yml`: Docker Compose configurations for each topology
+- `docker/config/default.toml`: Default neural network configuration
+- `src/bin/topology_tester.rs`: Automated testing tool
+- `src/bin/topology_monitor.rs`: Real-time monitoring dashboard
+- `static/topology_monitor.html`: Web interface for monitoring
+- `Dockerfile`: Multi-purpose neural network container
+- `Dockerfile.server`: Specialized neural network server container
+
+#### Usage - Output Server
 ```bash
 # Start server
 cargo run --bin output_server
@@ -299,7 +469,22 @@ cargo run --example simple_output_test
 # View dashboard at http://localhost:12000
 ```
 
-### Integration
+#### Usage - Docker Topology System 🐳 **NEW**
+```bash
+# Quick start
+cd docker && ./neural-topology.sh build
+./neural-topology.sh start linear
+./neural-topology.sh test linear
+
+# Advanced usage
+./neural-topology.sh test star -d 120 -r 2.0 -p sine
+./neural-topology.sh monitor
+./neural-topology.sh status
+./neural-topology.sh logs linear
+./neural-topology.sh clean
+```
+
+#### Integration - Output Server
 Neural networks send JSON output arrays to the TCP port:
 ```rust
 let outputs = vec![0.5, 0.8];
@@ -307,20 +492,37 @@ let json_data = serde_json::to_string(&outputs)?;
 stream.write_all(json_data.as_bytes()).await?;
 ```
 
-### Web Interface Features
+#### Integration - Docker Topology System 🐳 **NEW**
+Neural networks communicate via NNP protocol in containerized environments:
+```rust
+// Containers automatically connect based on NEURAL_OUTPUTS environment variable
+// Example: NEURAL_OUTPUTS=neural-node-2:8080,neural-node-3:8080
+```
+
+#### Web Interface Features
+**Output Server:**
 - **Real-time Charts**: Live visualization of neural network outputs
 - **Network Status**: Connection monitoring and health indicators
 - **Activity Log**: Timestamped log of all received data
 - **Multi-network Support**: Monitor multiple neural networks simultaneously
 - **Responsive Design**: Clean, modern web interface
 
+**Docker Topology Monitor:** 🐳 **NEW**
+- **Topology Visualization**: Interactive network diagrams
+- **Node Status**: Real-time health monitoring of all containers
+- **Performance Metrics**: Latency, throughput, and error rates
+- **Log Aggregation**: Centralized logging from all nodes
+- **Test Results**: Automated testing results and statistics
+
 ## Troubleshooting
 
 ### Common Issues
-1. **Port Conflicts**: Check if ports 8000-8002, 12000-12001 are available
+1. **Port Conflicts**: Check if ports 8000-8002, 8080-8084, 12000-12001 are available
 2. **TLS Certificates**: Ensure valid certificates for secure connections
 3. **Network Connectivity**: Verify firewall settings for distributed networks
 4. **Dependencies**: Run `cargo update` if build fails
+5. **Docker Issues** 🐳: Ensure Docker daemon is running and user has permissions
+6. **Container Startup** 🐳: Check configuration files and environment variables
 
 ### Debug Mode
 ```bash
@@ -329,12 +531,19 @@ RUST_LOG=debug cargo run --bin output_server
 
 # Verbose mode
 cargo run -- --verbose train -c config.toml
+
+# Docker debugging 🐳
+./neural-topology.sh -v start linear
+./neural-topology.sh logs linear
+docker logs neural-node-1
 ```
 
 ### Performance Tuning
 - **Parallel Processing**: Adjust `RAYON_NUM_THREADS` environment variable
 - **Batch Size**: Tune batch_size in configuration
 - **Network Topology**: Optimize layer sizes for your use case
+- **Docker Resources** 🐳: Allocate sufficient CPU/memory to containers
+- **Container Networking** 🐳: Use bridge networks for optimal performance
 
 ## AI Assistant Guidelines
 
@@ -352,6 +561,8 @@ cargo run -- --verbose train -c config.toml
 - **Optimize Performance**: Improve parallel processing or network protocols
 - **Add Security Features**: Enhance TLS/SSL implementation
 - **Create Examples**: Demonstrate new functionality with comprehensive examples
+- **Docker Enhancements** 🐳: Add new topologies, improve containerization, enhance monitoring
+- **Topology Testing** 🐳: Create new test patterns, improve validation, add performance benchmarks
 
 ### Key Concepts to Remember
 - **Hebbian Learning**: Unsupervised learning based on correlation ("neurons that fire together, wire together")
@@ -359,12 +570,15 @@ cargo run -- --verbose train -c config.toml
 - **Distributed Computing**: Networks can span multiple machines
 - **Real-time Visualization**: Web interfaces for monitoring and control
 - **I/O Integration**: Connect to external systems via TCP/SSL
+- **Docker Containerization** 🐳: Scalable deployment with container orchestration
+- **Topology Testing** 🐳: Automated validation of distributed network architectures
 
-### Working with the Three Server Systems
+### Working with the Server Systems
 - **Neural Network Server**: Distributed daemon for peer-to-peer neural network communication
   - **Protocol**: Binary NNP protocol with forward/backward data propagation
   - **Use Case**: Building distributed neural network topologies
   - **Testing**: Use `examples/neural_network_server.rs` for testing
+  - **Docker** 🐳: Containerized deployment with `Dockerfile.server`
   
 - **Input Server**: Web-based manual input control
   - **Protocol**: HTTP/WebSocket for browser communication
@@ -377,4 +591,11 @@ cargo run -- --verbose train -c config.toml
   - **Testing**: Use `examples/simple_output_test.rs` for testing
   - **Integration**: Easy to integrate with existing neural networks
 
-This repository represents a complete neural network ecosystem with advanced features for research, development, and production deployment. The recent addition of the Output Server provides powerful real-time visualization capabilities for monitoring neural network behavior.
+- **Docker Topology System** 🐳: Comprehensive containerization for distributed testing
+  - **Management**: Unified `neural-topology.sh` script for all operations
+  - **Topologies**: Linear, Star, Mesh, Ring configurations
+  - **Testing**: Automated data injection with `topology_tester`
+  - **Monitoring**: Real-time dashboard with `topology_monitor`
+  - **Use Case**: Research, validation, and production testing of distributed neural networks
+
+This repository represents a complete neural network ecosystem with advanced features for research, development, and production deployment. Recent additions include the Output Server for real-time visualization and a comprehensive Docker containerization system for testing distributed neural network topologies at scale.
