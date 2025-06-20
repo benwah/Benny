@@ -1,0 +1,235 @@
+# Custom 6-node topology with input/output servers
+# Topology: Input Server -> nn0(16 inputs) -> nn1 -> nn2 -> nn3 -> nn4 -> nn5(8 outputs) -> Output Server
+version: '3.8'
+
+services:
+  # Input Server - Web interface for manual input control
+  input-server:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: input-server
+    environment:
+      - RUST_LOG=info
+    ports:
+      - "8001:8001"  # Web interface port
+      - "3001:3001"  # WebSocket port
+    volumes:
+      - ../../static:/app/static:ro
+    networks:
+      - neural-net
+    command: [
+      "input_server",
+      "--network-host", "nn0",
+      "--network-port", "8080",
+      "--web-host", "0.0.0.0",
+      "--web-port", "8001",
+      "--websocket-port", "3001",
+      "--input-size", "16"
+    ]
+    depends_on:
+      - nn0
+
+  # Neural Network 0 - 16 inputs (receives from input server)
+  nn0:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.server
+    container_name: nn0
+    environment:
+      - NEURAL_NODE_NAME=nn0
+      - NEURAL_HOST=0.0.0.0
+      - NEURAL_PORT=8080
+      - NEURAL_LAYERS=16,12,8,4
+      - NEURAL_LEARNING_RATE=0.01
+      - NEURAL_HEBBIAN_MODE=Classic
+      - RUST_LOG=info
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../config/nn0.toml:/app/config/network.toml:ro
+    networks:
+      - neural-net
+    command: [
+      "neural_network", "server",
+      "-c", "/app/config/network.toml",
+      "-p", "8080",
+      "--outputs", "nn1:8080"
+    ]
+
+  # Neural Network 1
+  nn1:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.server
+    container_name: nn1
+    environment:
+      - NEURAL_NODE_NAME=nn1
+      - NEURAL_HOST=0.0.0.0
+      - NEURAL_PORT=8080
+      - NEURAL_LAYERS=4,8,6,4
+      - NEURAL_LEARNING_RATE=0.015
+      - NEURAL_HEBBIAN_MODE=Competitive
+      - RUST_LOG=info
+    ports:
+      - "8081:8080"
+    volumes:
+      - ../config/nn1.toml:/app/config/network.toml:ro
+    networks:
+      - neural-net
+    depends_on:
+      - nn0
+    command: [
+      "neural_network", "server",
+      "-c", "/app/config/network.toml",
+      "-p", "8080",
+      "--outputs", "nn2:8080"
+    ]
+
+  # Neural Network 2
+  nn2:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.server
+    container_name: nn2
+    environment:
+      - NEURAL_NODE_NAME=nn2
+      - NEURAL_HOST=0.0.0.0
+      - NEURAL_PORT=8080
+      - NEURAL_LAYERS=4,6,8,6
+      - NEURAL_LEARNING_RATE=0.02
+      - NEURAL_HEBBIAN_MODE=Oja
+      - RUST_LOG=info
+    ports:
+      - "8082:8080"
+    volumes:
+      - ../config/nn2.toml:/app/config/network.toml:ro
+    networks:
+      - neural-net
+    depends_on:
+      - nn1
+    command: [
+      "neural_network", "server",
+      "-c", "/app/config/network.toml",
+      "-p", "8080",
+      "--outputs", "nn3:8080"
+    ]
+
+  # Neural Network 3
+  nn3:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.server
+    container_name: nn3
+    environment:
+      - NEURAL_NODE_NAME=nn3
+      - NEURAL_HOST=0.0.0.0
+      - NEURAL_PORT=8080
+      - NEURAL_LAYERS=6,8,10,8
+      - NEURAL_LEARNING_RATE=0.018
+      - NEURAL_HEBBIAN_MODE=BCM
+      - RUST_LOG=info
+    ports:
+      - "8083:8080"
+    volumes:
+      - ../config/nn3.toml:/app/config/network.toml:ro
+    networks:
+      - neural-net
+    depends_on:
+      - nn2
+    command: [
+      "neural_network", "server",
+      "-c", "/app/config/network.toml",
+      "-p", "8080",
+      "--outputs", "nn4:8080"
+    ]
+
+  # Neural Network 4
+  nn4:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.server
+    container_name: nn4
+    environment:
+      - NEURAL_NODE_NAME=nn4
+      - NEURAL_HOST=0.0.0.0
+      - NEURAL_PORT=8080
+      - NEURAL_LAYERS=8,10,12,10
+      - NEURAL_LEARNING_RATE=0.016
+      - NEURAL_HEBBIAN_MODE=AntiHebbian
+      - RUST_LOG=info
+    ports:
+      - "8084:8080"
+    volumes:
+      - ../config/nn4.toml:/app/config/network.toml:ro
+    networks:
+      - neural-net
+    depends_on:
+      - nn3
+    command: [
+      "neural_network", "server",
+      "-c", "/app/config/network.toml",
+      "-p", "8080",
+      "--outputs", "nn5:8080"
+    ]
+
+  # Neural Network 5 - 8 outputs (sends to output server)
+  nn5:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.server
+    container_name: nn5
+    environment:
+      - NEURAL_NODE_NAME=nn5
+      - NEURAL_HOST=0.0.0.0
+      - NEURAL_PORT=8080
+      - NEURAL_LAYERS=10,12,10,8
+      - NEURAL_LEARNING_RATE=0.014
+      - NEURAL_HEBBIAN_MODE=Hybrid
+      - RUST_LOG=info
+    ports:
+      - "8085:8080"
+    volumes:
+      - ../config/nn5.toml:/app/config/network.toml:ro
+    networks:
+      - neural-net
+    depends_on:
+      - nn4
+    command: [
+      "neural_network", "server",
+      "-c", "/app/config/network.toml",
+      "-p", "8080",
+      "--outputs", "output-server:8003"
+    ]
+
+  # Output Server - Web interface for output visualization
+  output-server:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: output-server
+    environment:
+      - RUST_LOG=info
+    ports:
+      - "8002:8002"   # Web interface port (as requested)
+      - "8003:8003"   # TCP listener port for neural networks
+      - "12001:12001" # WebSocket port
+    volumes:
+      - ../../static:/app/static:ro
+    networks:
+      - neural-net
+    command: [
+      "output_server",
+      "--listen-host", "0.0.0.0",
+      "--listen-port", "8003",
+      "--web-host", "0.0.0.0",
+      "--web-port", "8002",
+      "--websocket-port", "12001",
+      "--output-size", "8"
+    ]
+    depends_on:
+      - nn5
+
+networks:
+  neural-net:
+    driver: bridge
