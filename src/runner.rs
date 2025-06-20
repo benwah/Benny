@@ -1,5 +1,6 @@
 use crate::cli::*;
 use crate::neural_network::{NeuralNetwork, HebbianLearningMode};
+use crate::server::{run_daemon, ServerConfig};
 use std::fs;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -537,5 +538,79 @@ pub fn run_demo(demo_type: DemoType) -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     
+    Ok(())
+}
+
+pub fn run_server(
+    config_path: PathBuf,
+    model_path: Option<PathBuf>,
+    port: u16,
+    cert_path: Option<PathBuf>,
+    key_path: Option<PathBuf>,
+    output_endpoints: Vec<String>,
+    daemon_mode: bool,
+    hebbian_learning: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("🚀 Starting Neural Network Server");
+    println!("=================================");
+
+    // Load configuration
+    let config = NetworkConfig::load_from_file(&config_path)?;
+    println!("✅ Loaded configuration from: {}", config_path.display());
+
+    // Create or load network
+    let network = if let Some(model_path) = model_path {
+        println!("📂 Loading pre-trained model from: {}", model_path.display());
+        NeuralNetwork::load_from_file(&model_path)?
+    } else {
+        println!("🆕 Creating new network from configuration");
+        config.create_network()?
+    };
+
+    println!("✅ Network ready: {}", network.info());
+    println!("   Parameters: {}", network.num_parameters());
+    println!("   Hebbian Learning: {}", hebbian_learning);
+
+    // Create server configuration
+    let server_config = ServerConfig {
+        name: format!("neural-network-{}", port),
+        address: "0.0.0.0".to_string(),
+        port,
+        cert_path,
+        key_path,
+        output_endpoints,
+        hebbian_learning,
+        daemon_mode,
+    };
+
+    if daemon_mode {
+        println!("🔄 Running in daemon mode");
+    }
+
+    if let (Some(cert), Some(key)) = (&server_config.cert_path, &server_config.key_path) {
+        println!("🔒 SSL/TLS enabled");
+        println!("   Certificate: {}", cert.display());
+        println!("   Private key: {}", key.display());
+    } else {
+        println!("⚠️  Running without SSL/TLS encryption");
+    }
+
+    if !server_config.output_endpoints.is_empty() {
+        println!("📤 Output endpoints configured:");
+        for endpoint in &server_config.output_endpoints {
+            println!("   - {}", endpoint);
+        }
+    }
+
+    println!("🌐 Server will listen on: {}:{}", server_config.address, server_config.port);
+    println!("📡 Using Neural Network Protocol (NNP)");
+    println!();
+
+    // Start the server using async runtime
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(async {
+        run_daemon(network, server_config).await
+    }).map_err(|e| format!("Server error: {:?}", e))?;
+
     Ok(())
 }

@@ -73,6 +73,33 @@ pub enum Commands {
         #[arg(short, long, default_value = "1000")]
         iterations: usize,
     },
+    /// Run as a network server/daemon
+    Server {
+        /// Configuration file path
+        #[arg(short, long)]
+        config: PathBuf,
+        /// Pre-trained model file path (optional)
+        #[arg(short, long)]
+        model: Option<PathBuf>,
+        /// Port to listen on
+        #[arg(short, long, default_value = "8080")]
+        port: u16,
+        /// SSL certificate file path
+        #[arg(long)]
+        cert: Option<PathBuf>,
+        /// SSL private key file path
+        #[arg(long)]
+        key: Option<PathBuf>,
+        /// Output network endpoints (host:port)
+        #[arg(long)]
+        outputs: Vec<String>,
+        /// Run as daemon (background process)
+        #[arg(short, long)]
+        daemon: bool,
+        /// Enable Hebbian learning on activations
+        #[arg(long, default_value = "true")]
+        hebbian_learning: bool,
+    },
     /// Show demo of different network capabilities
     Demo {
         /// Demo type to run

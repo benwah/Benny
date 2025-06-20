@@ -21,6 +21,9 @@ fn main() {
         Commands::Benchmark { config, iterations } => {
             run_benchmark(config, iterations)
         }
+        Commands::Server { config, model, port, cert, key, outputs, daemon, hebbian_learning } => {
+            run_server(config, model, port, cert, key, outputs, daemon, hebbian_learning)
+        }
         Commands::Demo { demo_type } => {
             run_demo(demo_type)
         }
