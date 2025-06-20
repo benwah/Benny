@@ -23,6 +23,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .default_value("8001"),
         )
         .arg(
+            Arg::new("web-host")
+                .long("web-host")
+                .value_name("HOST")
+                .help("Web server hostname")
+                .default_value("127.0.0.1"),
+        )
+        .arg(
             Arg::new("web-port")
                 .long("web-port")
                 .value_name("PORT")
@@ -65,6 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let network_host = matches.get_one::<String>("network-host").unwrap().clone();
     let network_port: u16 = matches.get_one::<String>("network-port").unwrap().parse()?;
+    let web_host = matches.get_one::<String>("web-host").unwrap().clone();
     let web_port: u16 = matches.get_one::<String>("web-port").unwrap().parse()?;
     let websocket_port: u16 = matches
         .get_one::<String>("websocket-port")
@@ -77,8 +85,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("🚀 Starting InputServer");
     println!("   Neural Network: {}:{}", network_host, network_port);
-    println!("   Web Interface: http://127.0.0.1:{}", web_port);
-    println!("   WebSocket: ws://127.0.0.1:{}", websocket_port);
+    println!("   Web Interface: http://{}:{}", web_host, web_port);
+    println!("   WebSocket: ws://{}:{}", web_host, websocket_port);
     println!("   Input Size: {}", input_size);
     println!("   TLS: {}", if use_tls { "Enabled" } else { "Disabled" });
 
@@ -94,7 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create InputServer configuration
     let config = InputServerConfig {
-        web_address: "127.0.0.1".to_string(),
+        web_address: web_host,
         web_port,
         websocket_port,
         neural_networks: vec![neural_network],
