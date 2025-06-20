@@ -138,6 +138,27 @@ fn demonstrate_hebbian_learning() {
     println!("  Weight change: {:.4}", final_weight - initial_weight);
     
     println!("\n💡 Run 'cargo run --example hebbian_learning' for full demonstration!");
+    
+    println!("\n{}", "=".repeat(50));
+    println!("\n🔗 Network Composition Preview");
+    println!("------------------------------");
+    println!("Connect multiple neural networks together");
+    println!("Creating a simple pipeline: Feature Extractor -> Classifier");
+    println!();
+    println!("Example code:");
+    println!("  let mut composer = NetworkComposer::new();");
+    println!("  let feature_net = NeuralNetwork::new(2, 4, 2, 0.1);");
+    println!("  let classifier_net = NeuralNetwork::new(2, 3, 1, 0.1);");
+    println!();
+    println!("  composer.add_network(\"features\".to_string(), feature_net).unwrap();");
+    println!("  composer.add_network(\"classifier\".to_string(), classifier_net).unwrap();");
+    println!("  composer.connect_networks(\"features\", \"classifier\", vec![0, 1], vec![0, 1]).unwrap();");
+    println!();
+    println!("  let mut inputs = HashMap::new();");
+    println!("  inputs.insert(\"features\".to_string(), vec![0.8, 0.3]);");
+    println!("  let outputs = composer.forward(&inputs).unwrap();");
+    println!();
+    println!("💡 Run 'cargo run --example network_composition' for full demonstration!");
 }
 
 fn train_network(nn: &mut NeuralNetwork, training_data: &[(Vec<f64>, Vec<f64>)], epochs: usize) {
