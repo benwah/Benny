@@ -7,6 +7,7 @@ A high-performance neural network library in Rust featuring Hebbian learning, di
 - **6 Hebbian Learning Modes**: Classic, Competitive, Oja, BCM, Anti-Hebbian, Hybrid
 - **Multi-core Processing**: Parallel training and inference using Rayon
 - **Distributed Networks**: Custom binary protocol (NNP) for network communication
+- **I/O Interfaces**: SSL/TCP interfaces for connecting external systems to neural networks
 - **Security**: TLS encryption with certificate-based authentication
 - **CLI Interface**: Complete command-line tools for training and deployment
 - **Server Mode**: HTTP/TCP server for neural network services
@@ -183,7 +184,78 @@ cargo run --example secure_distributed_network
 # Advanced features
 cargo run --example network_composition
 cargo run --example online_learning
+
+# I/O interfaces
+cargo run --example io_interface_example
 ```
+
+## I/O Interfaces
+
+Connect neural networks to external systems via SSL/TCP protocols:
+
+### Input Interfaces
+Connect data sources to neural network inputs:
+```rust
+use neural_network::{IoManager, TcpInputInterface, IoConfig};
+
+// Create input interface with TLS
+let mut input = TcpInputInterface::with_tls_connector(tls_connector);
+let config = IoConfig {
+    connection_id: Uuid::new_v4(),
+    endpoint: "sensor-data.example.com".to_string(),
+    port: 8443,
+    use_tls: true,
+    buffer_size: 1024,
+    timeout_ms: 5000,
+    ..Default::default()
+};
+
+// Connect and start streaming
+input.connect(config).await?;
+input.start_streaming(data_sender).await?;
+```
+
+### Output Interfaces
+Send neural network outputs to external systems:
+```rust
+use neural_network::{TcpOutputInterface, IoData};
+
+// Create output interface
+let mut output = TcpOutputInterface::with_tls_connector(tls_connector);
+output.connect(output_config).await?;
+
+// Send processed data
+let result = IoData {
+    timestamp: current_time(),
+    values: vec![0.8, 0.2], // Neural network output
+    metadata: HashMap::new(),
+};
+output.write_data(result).await?;
+```
+
+### I/O Manager
+Coordinate multiple I/O connections:
+```rust
+use neural_network::{IoManager, NeuralNetwork};
+
+// Create manager with neural network
+let network = NeuralNetwork::new(4, 8, 2, 0.1);
+let mut manager = IoManager::new(network);
+
+// Add interfaces
+manager.add_input_interface(input_id, Box::new(input_interface));
+manager.add_output_interface(output_id, Box::new(output_interface));
+
+// Start processing pipeline
+manager.start_processing().await?;
+```
+
+### Use Cases
+- **IoT Integration**: Connect sensors and actuators
+- **API Processing**: Real-time data from web services  
+- **Enterprise Systems**: Integration with existing infrastructure
+- **Distributed AI**: Coordinate multiple neural networks
+- **Edge Computing**: Deploy on resource-constrained devices
 
 ## API Reference
 
@@ -206,6 +278,16 @@ cargo run --example online_learning
 - `load_certificate(path)` - Load X.509 certificate
 - `enable_tls(config)` - Configure TLS settings
 - `validate_peer(cert)` - Verify peer certificate
+
+### I/O Interface Methods
+- `TcpInputInterface::new()` - Create TCP input interface
+- `TcpOutputInterface::new()` - Create TCP output interface
+- `connect(config).await` - Connect to external system
+- `start_streaming(channel).await` - Begin data streaming
+- `IoManager::new(network)` - Create I/O coordinator
+- `add_input_interface(id, interface)` - Register input
+- `add_output_interface(id, interface)` - Register output
+- `start_processing().await` - Begin I/O pipeline
 
 ## License
 

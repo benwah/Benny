@@ -7,7 +7,7 @@ edition = "2024"
 rand = "0.8"
 rayon = "1.8"
 tokio = { version = "1.0", features = ["full"] }
-uuid = { version = "1.0", features = ["v4"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
 futures-util = "0.3"
 byteorder = "1.4"
 crc32fast = "1.3"
@@ -26,6 +26,8 @@ hyper = { version = "0.14", features = ["full"] }
 futures = "0.3"
 log = "0.4"
 env_logger = "0.10"
+async-trait = "0.1"
+thiserror = "1.0"
 
 [[example]]
 name = "simple_example"
@@ -62,3 +64,7 @@ path = "examples/online_learning.rs"
 [[example]]
 name = "network_serialization"
 path = "examples/network_serialization.rs"
+
+[[example]]
+name = "io_interface_example"
+path = "examples/io_interface_example.rs"
