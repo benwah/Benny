@@ -9,7 +9,6 @@ pub struct NeuralNetwork {
     
     // Hebbian learning - now core components
     activation_history: Vec<Vec<Vec<f64>>>, // activation_history[layer][neuron][time_step]
-    correlation_matrix: Vec<Vec<Vec<f64>>>, // correlation_matrix[layer][from_neuron][to_neuron]
     history_size: usize,                    // Number of recent activations to remember
     hebbian_rate: f64,                      // Primary learning rate for Hebbian updates
     anti_hebbian_rate: f64,                 // Rate for anti-Hebbian (forgetting) updates
@@ -22,15 +21,6 @@ pub struct NeuralNetwork {
     use_backprop: bool,                     // Whether to supplement with backpropagation
     backprop_rate: f64,                     // Learning rate for backprop (when enabled)
     online_learning: bool,                  // Whether to continuously adapt during forward passes
-    
-    // Keep legacy fields for backward compatibility
-    input_size: usize,
-    hidden_size: usize,
-    output_size: usize,
-    weights_input_hidden: Vec<Vec<f64>>,
-    weights_hidden_output: Vec<Vec<f64>>,
-    bias_hidden: Vec<f64>,
-    bias_output: Vec<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -119,52 +109,20 @@ impl NeuralNetwork {
         
         // Initialize biases for each layer (except input)
         let mut biases: Vec<Vec<f64>> = Vec::new();
-        for i in 1..layers.len() {
-            let layer_biases: Vec<f64> = (0..layers[i]).map(|_| rng.gen_range(-1.0..1.0)).collect();
+        for &layer_size in layers.iter().skip(1) {
+            let layer_biases: Vec<f64> = (0..layer_size).map(|_| rng.gen_range(-1.0..1.0)).collect();
             biases.push(layer_biases);
         }
         
         // For backward compatibility, set up legacy fields
-        let input_size = layers[0];
-        let output_size = layers[layers.len() - 1];
-        let hidden_size = if layers.len() > 2 { layers[1] } else { 0 };
-        
-        // Legacy weight matrices (for single hidden layer compatibility)
-        let weights_input_hidden = if layers.len() > 2 {
-            weights[0].clone()
-        } else {
-            vec![vec![0.0; output_size]; input_size]
-        };
-        
-        let weights_hidden_output = if layers.len() > 2 {
-            weights[weights.len() - 1].clone()
-        } else {
-            weights[0].clone()
-        };
-        
-        let bias_hidden = if layers.len() > 2 {
-            biases[0].clone()
-        } else {
-            vec![0.0; hidden_size]
-        };
-        
-        let bias_output = biases[biases.len() - 1].clone();
-        
         // Initialize Hebbian learning components
         let history_size = 20; // Remember more activations for better correlation detection
         let mut activation_history = Vec::new();
-        let mut correlation_matrix = Vec::new();
         
-        for i in 0..layers.len() {
+        for &layer_size in layers.iter() {
             // Activation history for each neuron in each layer
-            let layer_history = vec![vec![0.0; history_size]; layers[i]];
+            let layer_history = vec![vec![0.0; history_size]; layer_size];
             activation_history.push(layer_history);
-            
-            // Correlation matrix for connections from this layer to next (if exists)
-            if i < layers.len() - 1 {
-                let layer_correlations = vec![vec![0.0; layers[i + 1]]; layers[i]];
-                correlation_matrix.push(layer_correlations);
-            }
         }
         
         // Set learning parameters based on mode
@@ -182,7 +140,6 @@ impl NeuralNetwork {
             weights,
             biases,
             activation_history,
-            correlation_matrix,
             history_size,
             hebbian_rate,
             anti_hebbian_rate,
@@ -193,13 +150,6 @@ impl NeuralNetwork {
             use_backprop,
             backprop_rate,
             online_learning: false, // Default to false for backward compatibility
-            input_size,
-            hidden_size,
-            output_size,
-            weights_input_hidden,
-            weights_hidden_output,
-            bias_hidden,
-            bias_output,
         }
     }
     
@@ -810,15 +760,7 @@ impl NeuralNetwork {
         self.calculate_correlation(layer1, neuron1, layer2, neuron2)
     }
     
-    /// Update legacy fields for backward compatibility
-    fn update_legacy_fields(&mut self) {
-        if self.layers.len() > 2 {
-            self.weights_input_hidden = self.weights[0].clone();
-            self.weights_hidden_output = self.weights[self.weights.len() - 1].clone();
-            self.bias_hidden = self.biases[0].clone();
-        }
-        self.bias_output = self.biases[self.biases.len() - 1].clone();
-    }
+
     
     /// Make a prediction using the trained network
     /// Note: If online learning is enabled, this will adapt weights during prediction
@@ -1129,11 +1071,8 @@ mod tests {
     #[test]
     fn test_neural_network_creation() {
         let nn = NeuralNetwork::new(2, 3, 1, 0.1);
-        assert_eq!(nn.input_size, 2);
-        assert_eq!(nn.hidden_size, 3);
-        assert_eq!(nn.output_size, 1);
-        assert_eq!(nn.hebbian_rate, 0.1);
         assert_eq!(nn.get_layers(), &[2, 3, 1]);
+        assert_eq!(nn.hebbian_rate, 0.1);
         // Test that it defaults to Classic Hebbian learning
         matches!(nn.learning_mode, HebbianLearningMode::Classic);
     }
@@ -1175,7 +1114,7 @@ mod tests {
         
         assert_eq!(prediction.len(), 2);
         for &output in &prediction {
-            assert!(output >= 0.0 && output <= 1.0);
+            assert!((0.0..=1.0).contains(&output));
         }
     }
     

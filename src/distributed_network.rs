@@ -23,7 +23,6 @@ pub type NetworkId = Uuid;
 /// SEQUENCE: 8 bytes - Message sequence number (big-endian)
 /// CHECKSUM: 4 bytes - CRC32 of payload (big-endian)
 /// PAYLOAD: Variable length - Message data
-
 const PROTOCOL_MAGIC: [u8; 4] = [0x4E, 0x4E, 0x50, 0x00]; // "NNP\0"
 const PROTOCOL_VERSION: u8 = 1;
 const HEADER_SIZE: usize = 22; // 4 + 1 + 1 + 4 + 8 + 4
@@ -205,7 +204,7 @@ impl NetworkMessage {
         }
         
         // Verify magic number
-        if &bytes[0..4] != &PROTOCOL_MAGIC {
+        if bytes[0..4] != PROTOCOL_MAGIC {
             return Err(ProtocolError::InvalidMagic);
         }
         
@@ -622,7 +621,7 @@ impl DistributedNetwork {
             }
             
             // Parse header to get payload length
-            if &header_buf[0..4] != &PROTOCOL_MAGIC {
+            if header_buf[0..4] != PROTOCOL_MAGIC {
                 println!("❌ Invalid magic number received");
                 continue;
             }
@@ -678,7 +677,7 @@ impl DistributedNetwork {
                     }
                     
                     // Forward message to main handler
-                    if let Err(_) = message_sender.send(message) {
+                    if message_sender.send(message).is_err() {
                         println!("❌ Failed to forward message to handler");
                         break;
                     }

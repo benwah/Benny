@@ -108,12 +108,10 @@ impl NetworkCertificate {
         let extensions = cert.extensions();
         for ext in extensions {
             // Custom OID for neural network capabilities: 1.3.6.1.4.1.99999.1
-            if ext.oid.to_string() == "1.3.6.1.4.1.99999.1" {
-                if ext.value.len() >= 4 {
-                    caps = u32::from_be_bytes([
-                        ext.value[0], ext.value[1], ext.value[2], ext.value[3]
-                    ]);
-                }
+            if ext.oid.to_string() == "1.3.6.1.4.1.99999.1" && ext.value.len() >= 4 {
+                caps = u32::from_be_bytes([
+                    ext.value[0], ext.value[1], ext.value[2], ext.value[3]
+                ]);
             }
         }
         
@@ -523,7 +521,7 @@ pub mod cert_utils {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::neural_network::HebbianLearningMode;
+
 
     #[test]
     fn test_certificate_capabilities() {
