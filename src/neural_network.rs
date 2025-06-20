@@ -1,7 +1,10 @@
 use rand::Rng;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::Path;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NeuralNetwork {
     layers: Vec<usize>,           // Layer sizes [input, hidden1, hidden2, ..., output]
     weights: Vec<Vec<Vec<f64>>>,  // weights[layer][from_neuron][to_neuron]
@@ -23,7 +26,7 @@ pub struct NeuralNetwork {
     online_learning: bool,                  // Whether to continuously adapt during forward passes
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum HebbianLearningMode {
     /// Classic Hebbian: "Neurons that fire together, wire together"
     Classic,
@@ -1061,6 +1064,133 @@ impl NeuralNetwork {
         }
     }
     
+    /// Save the neural network state to a JSON file
+    /// 
+    /// # Arguments
+    /// * `path` - The file path where the network state will be saved
+    /// 
+    /// # Returns
+    /// * `Result<(), Box<dyn std::error::Error>>` - Ok(()) on success, error on failure
+    /// 
+    /// # Example
+    /// ```
+    /// use neural_network::NeuralNetwork;
+    /// 
+    /// let mut nn = NeuralNetwork::new(2, 3, 1, 0.1);
+    /// nn.save_to_file("my_network.json").expect("Failed to save network");
+    /// ```
+    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
+        let json = serde_json::to_string_pretty(self)?;
+        fs::write(path, json)?;
+        Ok(())
+    }
+    
+    /// Load a neural network state from a JSON file
+    /// 
+    /// # Arguments
+    /// * `path` - The file path from which to load the network state
+    /// 
+    /// # Returns
+    /// * `Result<NeuralNetwork, Box<dyn std::error::Error>>` - The loaded network on success, error on failure
+    /// 
+    /// # Example
+    /// ```
+    /// use neural_network::NeuralNetwork;
+    /// 
+    /// let nn = NeuralNetwork::load_from_file("my_network.json")
+    ///     .expect("Failed to load network");
+    /// ```
+    pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
+        let json = fs::read_to_string(path)?;
+        let network = serde_json::from_str(&json)?;
+        Ok(network)
+    }
+    
+    /// Save the neural network state to a binary file (more compact than JSON)
+    /// 
+    /// # Arguments
+    /// * `path` - The file path where the network state will be saved
+    /// 
+    /// # Returns
+    /// * `Result<(), Box<dyn std::error::Error>>` - Ok(()) on success, error on failure
+    /// 
+    /// # Example
+    /// ```
+    /// use neural_network::NeuralNetwork;
+    /// 
+    /// let mut nn = NeuralNetwork::new(2, 3, 1, 0.1);
+    /// nn.save_to_binary("my_network.bin").expect("Failed to save network");
+    /// ```
+    pub fn save_to_binary<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
+        let encoded = bincode::serialize(self)?;
+        fs::write(path, encoded)?;
+        Ok(())
+    }
+    
+    /// Load a neural network state from a binary file
+    /// 
+    /// # Arguments
+    /// * `path` - The file path from which to load the network state
+    /// 
+    /// # Returns
+    /// * `Result<NeuralNetwork, Box<dyn std::error::Error>>` - The loaded network on success, error on failure
+    /// 
+    /// # Example
+    /// ```
+    /// use neural_network::NeuralNetwork;
+    /// 
+    /// let nn = NeuralNetwork::load_from_binary("my_network.bin")
+    ///     .expect("Failed to load network");
+    /// ```
+    pub fn load_from_binary<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
+        let data = fs::read(path)?;
+        let network = bincode::deserialize(&data)?;
+        Ok(network)
+    }
+    
+    /// Export network metadata and architecture information
+    /// 
+    /// # Returns
+    /// * `String` - A human-readable summary of the network architecture and configuration
+    /// 
+    /// # Example
+    /// ```
+    /// use neural_network::NeuralNetwork;
+    /// 
+    /// let nn = NeuralNetwork::new(2, 3, 1, 0.1);
+    /// println!("{}", nn.export_metadata());
+    /// ```
+    pub fn export_metadata(&self) -> String {
+        format!(
+            "Neural Network Metadata\n\
+             ========================\n\
+             Architecture: {:?}\n\
+             Total Parameters: {}\n\
+             Learning Mode: {:?}\n\
+             Hebbian Rate: {:.6}\n\
+             Anti-Hebbian Rate: {:.6}\n\
+             Decay Rate: {:.6}\n\
+             Homeostatic Rate: {:.6}\n\
+             Target Activity: {:.6}\n\
+             History Size: {}\n\
+             Uses Backprop: {}\n\
+             Backprop Rate: {:.6}\n\
+             Online Learning: {}\n\
+             ========================",
+            self.layers,
+            self.num_parameters(),
+            self.learning_mode,
+            self.hebbian_rate,
+            self.anti_hebbian_rate,
+            self.decay_rate,
+            self.homeostatic_rate,
+            self.target_activity,
+            self.history_size,
+            self.use_backprop,
+            self.backprop_rate,
+            self.online_learning
+        )
+    }
 
 }
 
@@ -1248,5 +1378,172 @@ mod tests {
         // Weight should be reduced
         assert!(nn.weights[0][0][0] < 1.0);
         assert!(nn.weights[0][0][0] > 0.0);
+    }
+    
+    #[test]
+    fn test_save_and_load_json() {
+        use std::fs;
+        
+        // Create a network and train it a bit
+        let mut original_nn = NeuralNetwork::new(2, 3, 1, 0.1);
+        let inputs = vec![0.5, 0.8];
+        let targets = vec![0.3];
+        
+        // Train for a few iterations to change weights
+        for _ in 0..5 {
+            original_nn.train(&inputs, &targets);
+        }
+        
+        // Save to file
+        let filename = "test_network.json";
+        original_nn.save_to_file(filename).expect("Failed to save network");
+        
+        // Load from file
+        let mut loaded_nn = NeuralNetwork::load_from_file(filename).expect("Failed to load network");
+        
+        // Verify the networks are identical (with tolerance for JSON precision)
+        assert_eq!(original_nn.layers, loaded_nn.layers);
+        assert_eq!(original_nn.learning_mode, loaded_nn.learning_mode);
+        assert!((original_nn.hebbian_rate - loaded_nn.hebbian_rate).abs() < 1e-10);
+        
+        // Check weights with tolerance for JSON precision
+        for (orig_layer, loaded_layer) in original_nn.weights.iter().zip(loaded_nn.weights.iter()) {
+            for (orig_neuron, loaded_neuron) in orig_layer.iter().zip(loaded_layer.iter()) {
+                for (orig_weight, loaded_weight) in orig_neuron.iter().zip(loaded_neuron.iter()) {
+                    assert!((orig_weight - loaded_weight).abs() < 1e-10, 
+                           "Weight difference too large: {} vs {}", orig_weight, loaded_weight);
+                }
+            }
+        }
+        
+        // Check biases with tolerance for JSON precision
+        for (orig_layer, loaded_layer) in original_nn.biases.iter().zip(loaded_nn.biases.iter()) {
+            for (orig_bias, loaded_bias) in orig_layer.iter().zip(loaded_layer.iter()) {
+                assert!((orig_bias - loaded_bias).abs() < 1e-10,
+                       "Bias difference too large: {} vs {}", orig_bias, loaded_bias);
+            }
+        }
+        
+        // Test that they produce the same output
+        let (original_output, _) = original_nn.forward(&inputs);
+        let (loaded_output, _) = loaded_nn.forward(&inputs);
+        
+        for (orig, loaded) in original_output.iter().zip(loaded_output.iter()) {
+            assert!((orig - loaded).abs() < 1e-10);
+        }
+        
+        // Clean up
+        let _ = fs::remove_file(filename);
+    }
+    
+    #[test]
+    fn test_save_and_load_binary() {
+        use std::fs;
+        
+        // Create a Hebbian network with specific configuration
+        let mut original_nn = NeuralNetwork::with_layers_and_mode(
+            &[3, 4, 2], 
+            0.05, 
+            HebbianLearningMode::Oja
+        );
+        
+        let inputs = vec![0.2, 0.7, 0.9];
+        let targets = vec![0.4, 0.6];
+        
+        // Train to modify the network state
+        for _ in 0..3 {
+            original_nn.train(&inputs, &targets);
+        }
+        
+        // Save to binary file
+        let filename = "test_network.bin";
+        original_nn.save_to_binary(filename).expect("Failed to save network");
+        
+        // Load from binary file
+        let mut loaded_nn = NeuralNetwork::load_from_binary(filename).expect("Failed to load network");
+        
+        // Verify complete state preservation
+        assert_eq!(original_nn.layers, loaded_nn.layers);
+        assert_eq!(original_nn.weights, loaded_nn.weights);
+        assert_eq!(original_nn.biases, loaded_nn.biases);
+        assert_eq!(original_nn.activation_history, loaded_nn.activation_history);
+        assert_eq!(original_nn.history_size, loaded_nn.history_size);
+        assert_eq!(original_nn.hebbian_rate, loaded_nn.hebbian_rate);
+        assert_eq!(original_nn.anti_hebbian_rate, loaded_nn.anti_hebbian_rate);
+        assert_eq!(original_nn.decay_rate, loaded_nn.decay_rate);
+        assert_eq!(original_nn.homeostatic_rate, loaded_nn.homeostatic_rate);
+        assert_eq!(original_nn.target_activity, loaded_nn.target_activity);
+        assert_eq!(original_nn.learning_mode, loaded_nn.learning_mode);
+        assert_eq!(original_nn.use_backprop, loaded_nn.use_backprop);
+        assert_eq!(original_nn.backprop_rate, loaded_nn.backprop_rate);
+        assert_eq!(original_nn.online_learning, loaded_nn.online_learning);
+        
+        // Test identical behavior
+        let (original_output, _) = original_nn.forward(&inputs);
+        let (loaded_output, _) = loaded_nn.forward(&inputs);
+        
+        for (orig, loaded) in original_output.iter().zip(loaded_output.iter()) {
+            assert!((orig - loaded).abs() < 1e-15);
+        }
+        
+        // Clean up
+        let _ = fs::remove_file(filename);
+    }
+    
+    #[test]
+    fn test_export_metadata() {
+        let nn = NeuralNetwork::with_layers_and_mode(
+            &[2, 4, 3, 1], 
+            0.03, 
+            HebbianLearningMode::BCM
+        );
+        
+        let metadata = nn.export_metadata();
+        
+        // Check that metadata contains key information
+        assert!(metadata.contains("Architecture: [2, 4, 3, 1]"));
+        assert!(metadata.contains("Learning Mode: BCM"));
+        assert!(metadata.contains("Hebbian Rate: 0.030000"));
+        assert!(metadata.contains("Total Parameters:"));
+        assert!(metadata.contains("========================"));
+    }
+    
+    #[test]
+    fn test_serialization_with_online_learning() {
+        use std::fs;
+        
+        // Create an online learning network
+        let mut original_nn = NeuralNetwork::with_online_learning(
+            &[2, 3, 1], 
+            0.02, 
+            HebbianLearningMode::Hybrid
+        );
+        
+        let inputs = vec![0.3, 0.8];
+        
+        // Do some forward passes (which will modify weights due to online learning)
+        for _ in 0..3 {
+            original_nn.forward(&inputs);
+        }
+        
+        // Save and load
+        let filename = "test_online_network.json";
+        original_nn.save_to_file(filename).expect("Failed to save online network");
+        let mut loaded_nn = NeuralNetwork::load_from_file(filename).expect("Failed to load online network");
+        
+        // Verify online learning state is preserved
+        assert_eq!(original_nn.is_online_learning(), loaded_nn.is_online_learning());
+        assert!(loaded_nn.is_online_learning()); // Should be true
+        
+        // Verify identical outputs
+        let (original_output, _) = original_nn.forward(&inputs);
+        let (loaded_output, _) = loaded_nn.forward(&inputs);
+        
+        for (orig, loaded) in original_output.iter().zip(loaded_output.iter()) {
+            assert!((orig - loaded).abs() < 1e-10);
+        }
+        
+        // Clean up
+        let _ = fs::remove_file(filename);
     }
 }
