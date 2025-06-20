@@ -681,6 +681,40 @@ Our implementation incorporates recent findings from neuroscience:
 
 This makes the network not just a computational tool, but a model of how biological brains actually learn and adapt.
 
+## 🌐 Server/Daemon Mode
+
+The neural network can run as a server that listens for SSL connections, accepts input activations, and applies Hebbian learning as data flows through:
+
+```bash
+# Start a neural network server with Hebbian learning
+neural_network server --config network_config.json --port 8080 --hebbian-learning
+
+# Run with SSL/TLS encryption
+neural_network server \
+  --config network_config.json \
+  --port 8080 \
+  --cert server.crt \
+  --key server.key \
+  --hebbian-learning
+
+# Forward outputs to other neural networks
+neural_network server \
+  --config network_config.json \
+  --port 8080 \
+  --outputs "192.168.1.100:8081" "192.168.1.101:8082" \
+  --hebbian-learning
+```
+
+**Server Features:**
+- **Neural Network Protocol (NNP)**: Binary protocol for efficient communication
+- **SSL/TLS Support**: Secure encrypted connections
+- **Hebbian Learning**: Real-time learning on incoming activations
+- **Output Forwarding**: Chain multiple networks together
+- **Daemon Mode**: Background operation
+- **Distributed Architecture**: Integrates with existing distributed network capabilities
+
+See [docs/server_mode.md](docs/server_mode.md) for detailed documentation.
+
 ## Future Enhancements
 
 Potential improvements for this Hebbian neural network:
