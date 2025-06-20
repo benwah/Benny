@@ -5,6 +5,7 @@ A basic implementation of a feedforward neural network written in Rust from scra
 ## Features
 
 - **Flexible Architecture**: Support for any number of layers and neurons per layer
+- **Network Composition**: Connect multiple neural networks together in complex architectures
 - **Hebbian Learning**: Biologically-inspired "neurons that fire together, wire together" learning
 - **Activation History**: Track neuron activations over time for correlation-based learning
 - **Hybrid Training**: Combine backpropagation with Hebbian learning for enhanced performance
@@ -202,6 +203,102 @@ let error = nn.train_hybrid(&[1.0, 0.0], &[1.0]);
 - **Weight Decay**: Prevents unbounded weight growth in Hebbian learning
 - **Hybrid Training**: Combines supervised (backpropagation) and unsupervised (Hebbian) learning
 
+## Network Composition
+
+Connect multiple neural networks together to create complex architectures like pipelines, fan-out systems, ensembles, and multi-stage processing networks.
+
+### NetworkComposer API
+
+```rust
+use neural_network::{NeuralNetwork, NetworkComposer};
+use std::collections::HashMap;
+
+// Create a composer to manage multiple networks
+let mut composer = NetworkComposer::new();
+
+// Add individual networks
+let feature_net = NeuralNetwork::new(4, 6, 3, 0.1);
+let classifier_net = NeuralNetwork::new(3, 4, 2, 0.1);
+
+composer.add_network("features".to_string(), feature_net).unwrap();
+composer.add_network("classifier".to_string(), classifier_net).unwrap();
+
+// Connect outputs of one network to inputs of another
+composer.connect_networks(
+    "features",      // Source network
+    "classifier",    // Target network
+    vec![0, 1, 2],   // Source output indices
+    vec![0, 1, 2]    // Target input indices
+).unwrap();
+```
+
+### Network Composition Methods
+
+- `add_network(name: String, network: NeuralNetwork)`: Add a network to the composition
+- `remove_network(name: &str)`: Remove a network from the composition
+- `connect_networks(source, target, source_outputs, target_inputs)`: Connect network outputs to inputs
+- `forward(inputs: &HashMap<String, Vec<f64>>)`: Forward propagation through entire composition
+- `train_network(name, inputs, targets)`: Train a specific network in the composition
+- `get_network(name)` / `get_network_mut(name)`: Access individual networks
+- `info()`: Get detailed information about the composition
+
+### Composition Architectures
+
+#### 1. Pipeline Architecture
+```
+Input -> Network1 -> Network2 -> Output
+```
+
+#### 2. Fan-out Architecture  
+```
+Input -> Network1 -> [Network2, Network3]
+```
+
+#### 3. Ensemble Architecture
+```
+Input -> [Network1, Network2, Network3] -> Voting Network -> Output
+```
+
+#### 4. Multi-Stage Processing
+```
+InputA -> NetworkA ↘
+                    Fusion -> Output
+InputB -> NetworkB ↗
+```
+
+### Example: Simple Pipeline
+
+```rust
+let mut composer = NetworkComposer::new();
+
+// Feature extraction network: 4 inputs -> 3 features
+let feature_extractor = NeuralNetwork::new(4, 6, 3, 0.1);
+// Classification network: 3 features -> 2 classes  
+let classifier = NeuralNetwork::new(3, 4, 2, 0.1);
+
+composer.add_network("extractor".to_string(), feature_extractor).unwrap();
+composer.add_network("classifier".to_string(), classifier).unwrap();
+
+// Connect all feature outputs to classifier inputs
+composer.connect_networks("extractor", "classifier", vec![0, 1, 2], vec![0, 1, 2]).unwrap();
+
+// Forward propagation
+let mut inputs = HashMap::new();
+inputs.insert("extractor".to_string(), vec![0.8, 0.3, 0.9, 0.2]);
+
+let outputs = composer.forward(&inputs).unwrap();
+println!("Features: {:?}", outputs["extractor"]);
+println!("Classification: {:?}", outputs["classifier"]);
+```
+
+### Key Features
+
+- **Automatic Execution Order**: Networks are executed in topological order based on connections
+- **Cycle Detection**: Prevents creation of circular dependencies
+- **Flexible Connections**: Connect any subset of outputs to any subset of inputs
+- **Individual Training**: Train specific networks within the composition
+- **Validation**: Comprehensive error checking for network sizes and connection validity
+
 ## Examples
 
 Run the examples to see the neural network in action:
@@ -218,6 +315,9 @@ cargo run --example flexible_architecture
 
 # Hebbian learning demonstration
 cargo run --example hebbian_learning
+
+# Network composition demonstration
+cargo run --example network_composition
 ```
 
 ### Included Problems
