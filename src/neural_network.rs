@@ -21,6 +21,7 @@ pub struct NeuralNetwork {
     learning_mode: HebbianLearningMode,     // Type of Hebbian learning to use
     use_backprop: bool,                     // Whether to supplement with backpropagation
     backprop_rate: f64,                     // Learning rate for backprop (when enabled)
+    online_learning: bool,                  // Whether to continuously adapt during forward passes
     
     // Keep legacy fields for backward compatibility
     input_size: usize,
@@ -191,6 +192,7 @@ impl NeuralNetwork {
             learning_mode: mode,
             use_backprop,
             backprop_rate,
+            online_learning: false, // Default to false for backward compatibility
             input_size,
             hidden_size,
             output_size,
@@ -229,6 +231,27 @@ impl NeuralNetwork {
         self.backprop_rate = rate;
     }
     
+    /// Enable or disable online Hebbian learning during forward passes
+    /// When enabled, the network continuously adapts weights during inference
+    /// This mimics biological neural plasticity where neurons adapt constantly
+    pub fn set_online_learning(&mut self, enabled: bool) {
+        self.online_learning = enabled;
+    }
+    
+    /// Check if online learning is enabled
+    pub fn is_online_learning(&self) -> bool {
+        self.online_learning
+    }
+    
+    /// Create a network with online learning enabled from the start
+    /// This is the most biologically realistic mode where the network
+    /// continuously adapts to input patterns without separate training phases
+    pub fn with_online_learning(layer_sizes: &[usize], hebbian_rate: f64, mode: HebbianLearningMode) -> Self {
+        let mut network = Self::with_layers_and_mode(layer_sizes, hebbian_rate, mode);
+        network.online_learning = true;
+        network
+    }
+    
     /// Sigmoid activation function
     fn sigmoid(x: f64) -> f64 {
         1.0 / (1.0 + (-x).exp())
@@ -240,7 +263,17 @@ impl NeuralNetwork {
     }
     
     /// Forward propagation through the network
-    pub fn forward(&self, inputs: &[f64]) -> (Vec<f64>, Vec<f64>) {
+    /// If online learning is enabled, weights are continuously adapted during forward pass
+    pub fn forward(&mut self, inputs: &[f64]) -> (Vec<f64>, Vec<f64>) {
+        if self.online_learning {
+            self.forward_with_online_learning(inputs)
+        } else {
+            self.forward_static(inputs)
+        }
+    }
+    
+    /// Forward propagation without weight updates (traditional inference)
+    pub fn forward_static(&self, inputs: &[f64]) -> (Vec<f64>, Vec<f64>) {
         assert_eq!(inputs.len(), self.layers[0], "Input size mismatch");
         
         let mut activations = vec![inputs.to_vec()];
@@ -261,6 +294,53 @@ impl NeuralNetwork {
             
             activations.push(next_layer);
         }
+        
+        // For backward compatibility, return (hidden, output)
+        let output = activations.last().unwrap().clone();
+        let hidden = if activations.len() > 2 {
+            activations[1].clone()
+        } else {
+            vec![]
+        };
+        
+        (hidden, output)
+    }
+    
+    /// Forward propagation with continuous Hebbian learning (online learning)
+    /// This is the biologically realistic mode where neurons adapt during every activation
+    pub fn forward_with_online_learning(&mut self, inputs: &[f64]) -> (Vec<f64>, Vec<f64>) {
+        assert_eq!(inputs.len(), self.layers[0], "Input size mismatch");
+        
+        let mut activations = vec![inputs.to_vec()];
+        
+        // Store input activations in history for Hebbian learning
+        self.store_activations(0, inputs);
+        
+        // Forward propagate through each layer with online adaptation
+        for layer_idx in 0..self.weights.len() {
+            let current_layer = &activations[layer_idx];
+            let mut next_layer = vec![0.0; self.layers[layer_idx + 1]];
+            
+            // Calculate weighted sum + bias for each neuron in next layer
+            for to_neuron in 0..next_layer.len() {
+                let mut sum = self.biases[layer_idx][to_neuron];
+                for from_neuron in 0..current_layer.len() {
+                    sum += current_layer[from_neuron] * self.weights[layer_idx][from_neuron][to_neuron];
+                }
+                next_layer[to_neuron] = Self::sigmoid(sum);
+            }
+            
+            activations.push(next_layer.clone());
+            
+            // Store activations for this layer
+            self.store_activations(layer_idx + 1, &next_layer);
+            
+            // Apply online Hebbian learning to the connection we just used
+            self.apply_online_hebbian_to_layer(layer_idx, &activations);
+        }
+        
+        // Apply homeostatic regulation to maintain network stability
+        self.apply_online_homeostatic_regulation(&activations);
         
         // For backward compatibility, return (hidden, output)
         let output = activations.last().unwrap().clone();
@@ -741,8 +821,16 @@ impl NeuralNetwork {
     }
     
     /// Make a prediction using the trained network
-    pub fn predict(&self, inputs: &[f64]) -> Vec<f64> {
+    /// Note: If online learning is enabled, this will adapt weights during prediction
+    pub fn predict(&mut self, inputs: &[f64]) -> Vec<f64> {
         let (_, output) = self.forward(inputs);
+        output
+    }
+    
+    /// Make a prediction without any weight updates (pure inference)
+    /// This is useful when you want to test the network without adaptation
+    pub fn predict_static(&self, inputs: &[f64]) -> Vec<f64> {
+        let (_, output) = self.forward_static(inputs);
         output
     }
     
@@ -767,6 +855,152 @@ impl NeuralNetwork {
     /// Get the current Hebbian learning mode
     pub fn get_learning_mode(&self) -> &HebbianLearningMode {
         &self.learning_mode
+    }
+    
+    /// Get a specific weight value for inspection
+    pub fn get_weight(&self, layer: usize, from_neuron: usize, to_neuron: usize) -> f64 {
+        self.weights[layer][from_neuron][to_neuron]
+    }
+    
+    /// Apply online Hebbian learning to a specific layer during forward pass
+    /// This is called during forward propagation when online learning is enabled
+    fn apply_online_hebbian_to_layer(&mut self, layer_idx: usize, activations: &[Vec<f64>]) {
+        let from_layer = &activations[layer_idx];
+        let to_layer = &activations[layer_idx + 1];
+        
+        // Apply the selected Hebbian learning rule with reduced learning rate for stability
+        let online_rate = self.hebbian_rate * 0.1; // Reduce rate for online learning stability
+        
+        match self.learning_mode {
+            HebbianLearningMode::Classic => {
+                self.apply_online_classic_hebbian(layer_idx, from_layer, to_layer, online_rate);
+            },
+            HebbianLearningMode::Competitive => {
+                self.apply_online_competitive_learning(layer_idx, from_layer, to_layer, online_rate);
+            },
+            HebbianLearningMode::Oja => {
+                self.apply_online_oja_rule(layer_idx, from_layer, to_layer, online_rate);
+            },
+            HebbianLearningMode::BCM => {
+                self.apply_online_bcm_rule(layer_idx, from_layer, to_layer, online_rate);
+            },
+            HebbianLearningMode::AntiHebbian => {
+                self.apply_online_anti_hebbian(layer_idx, from_layer, to_layer, online_rate);
+            },
+            HebbianLearningMode::Hybrid => {
+                // Apply multiple rules with reduced rates
+                self.apply_online_classic_hebbian(layer_idx, from_layer, to_layer, online_rate * 0.5);
+                self.apply_online_oja_rule(layer_idx, from_layer, to_layer, online_rate * 0.3);
+            }
+        }
+        
+        // Apply light weight decay to prevent runaway growth
+        self.apply_online_weight_decay(layer_idx);
+    }
+    
+    /// Online classic Hebbian learning: immediate weight updates during forward pass
+    fn apply_online_classic_hebbian(&mut self, layer_idx: usize, from_layer: &[f64], to_layer: &[f64], rate: f64) {
+        for from_neuron in 0..from_layer.len() {
+            for to_neuron in 0..to_layer.len() {
+                let pre_activity = from_layer[from_neuron];
+                let post_activity = to_layer[to_neuron];
+                let weight_update = rate * pre_activity * post_activity;
+                self.weights[layer_idx][from_neuron][to_neuron] += weight_update;
+            }
+        }
+    }
+    
+    /// Online competitive learning with winner-take-all dynamics
+    fn apply_online_competitive_learning(&mut self, layer_idx: usize, from_layer: &[f64], to_layer: &[f64], rate: f64) {
+        // Find the most active neuron (winner)
+        let winner = to_layer.iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+            .map(|(idx, _)| idx)
+            .unwrap_or(0);
+        
+        // Update weights only for the winner
+        for from_neuron in 0..from_layer.len() {
+            let pre_activity = from_layer[from_neuron];
+            let post_activity = to_layer[winner];
+            let weight_update = rate * pre_activity * (post_activity - self.weights[layer_idx][from_neuron][winner]);
+            self.weights[layer_idx][from_neuron][winner] += weight_update;
+        }
+    }
+    
+    /// Online Oja's rule with normalization
+    fn apply_online_oja_rule(&mut self, layer_idx: usize, from_layer: &[f64], to_layer: &[f64], rate: f64) {
+        for from_neuron in 0..from_layer.len() {
+            for to_neuron in 0..to_layer.len() {
+                let pre_activity = from_layer[from_neuron];
+                let post_activity = to_layer[to_neuron];
+                let current_weight = self.weights[layer_idx][from_neuron][to_neuron];
+                
+                // Oja's rule: Δw = η * y * (x - y * w)
+                let weight_update = rate * post_activity * (pre_activity - post_activity * current_weight);
+                self.weights[layer_idx][from_neuron][to_neuron] += weight_update;
+            }
+        }
+    }
+    
+    /// Online BCM rule with sliding threshold
+    fn apply_online_bcm_rule(&mut self, layer_idx: usize, from_layer: &[f64], to_layer: &[f64], rate: f64) {
+        for from_neuron in 0..from_layer.len() {
+            for to_neuron in 0..to_layer.len() {
+                let pre_activity = from_layer[from_neuron];
+                let post_activity = to_layer[to_neuron];
+                
+                // BCM threshold (simplified - using target activity)
+                let threshold = self.target_activity;
+                let bcm_factor = post_activity * (post_activity - threshold);
+                
+                let weight_update = rate * bcm_factor * pre_activity;
+                self.weights[layer_idx][from_neuron][to_neuron] += weight_update;
+            }
+        }
+    }
+    
+    /// Online anti-Hebbian learning for decorrelation
+    fn apply_online_anti_hebbian(&mut self, layer_idx: usize, from_layer: &[f64], to_layer: &[f64], rate: f64) {
+        for from_neuron in 0..from_layer.len() {
+            for to_neuron in 0..to_layer.len() {
+                let pre_activity = from_layer[from_neuron];
+                let post_activity = to_layer[to_neuron];
+                
+                // Anti-Hebbian: decrease weights when both neurons are active
+                let weight_update = -rate * pre_activity * post_activity;
+                self.weights[layer_idx][from_neuron][to_neuron] += weight_update;
+            }
+        }
+    }
+    
+    /// Apply light weight decay to a specific layer during online learning
+    fn apply_online_weight_decay(&mut self, layer_idx: usize) {
+        let decay = 1.0 - (self.decay_rate * 0.1); // Lighter decay for online learning
+        for neuron_weights in &mut self.weights[layer_idx] {
+            for weight in neuron_weights {
+                *weight *= decay;
+            }
+        }
+    }
+    
+    /// Apply homeostatic regulation during online learning
+    fn apply_online_homeostatic_regulation(&mut self, activations: &[Vec<f64>]) {
+        let regulation_rate = self.homeostatic_rate * 0.1; // Lighter regulation for online learning
+        
+        for layer_idx in 1..activations.len() {
+            let layer_activations = &activations[layer_idx];
+            
+            for neuron_idx in 0..layer_activations.len() {
+                let current_activity = layer_activations[neuron_idx];
+                let activity_error = self.target_activity - current_activity;
+                
+                // Adjust bias to regulate activity level
+                if layer_idx > 0 {
+                    self.biases[layer_idx - 1][neuron_idx] += regulation_rate * activity_error;
+                }
+            }
+        }
     }
     
     /// Get the number of layers (including input and output)
@@ -885,10 +1119,7 @@ impl NeuralNetwork {
         }
     }
     
-    /// Get weight between two specific neurons (for analysis/debugging)
-    pub fn get_weight(&self, layer: usize, from_neuron: usize, to_neuron: usize) -> f64 {
-        self.weights[layer][from_neuron][to_neuron]
-    }
+
 }
 
 #[cfg(test)]
@@ -909,7 +1140,7 @@ mod tests {
 
     #[test]
     fn test_forward_pass() {
-        let nn = NeuralNetwork::new(2, 3, 1, 0.1);
+        let mut nn = NeuralNetwork::new(2, 3, 1, 0.1);
         let inputs = vec![0.5, 0.8];
         let (hidden, output) = nn.forward(&inputs);
         
@@ -922,7 +1153,7 @@ mod tests {
 
     #[test]
     fn test_prediction() {
-        let nn = NeuralNetwork::new(2, 3, 1, 0.1);
+        let mut nn = NeuralNetwork::new(2, 3, 1, 0.1);
         let inputs = vec![0.5, 0.8];
         let prediction = nn.predict(&inputs);
         
@@ -933,7 +1164,7 @@ mod tests {
     #[test]
     fn test_flexible_architecture() {
         // Test deep network: 3 inputs -> 5 hidden -> 4 hidden -> 2 outputs
-        let nn = NeuralNetwork::with_layers(&[3, 5, 4, 2], 0.05);
+        let mut nn = NeuralNetwork::with_layers(&[3, 5, 4, 2], 0.05);
         
         assert_eq!(nn.get_layers(), &[3, 5, 4, 2]);
         assert_eq!(nn.num_layers(), 4);
@@ -951,7 +1182,7 @@ mod tests {
     #[test]
     fn test_simple_network_no_hidden() {
         // Test direct input -> output (no hidden layers)
-        let nn = NeuralNetwork::with_layers(&[2, 1], 0.1);
+        let mut nn = NeuralNetwork::with_layers(&[2, 1], 0.1);
         
         assert_eq!(nn.get_layers(), &[2, 1]);
         assert_eq!(nn.num_layers(), 2);

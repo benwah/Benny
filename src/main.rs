@@ -65,7 +65,7 @@ fn solve_xor_problem() {
     train_network(&mut nn, &training_data, 10000);
     
     println!("\nResults:");
-    test_network(&nn, &training_data);
+    test_network(&mut nn, &training_data);
 }
 
 fn solve_and_problem() {
@@ -86,7 +86,7 @@ fn solve_and_problem() {
     train_network(&mut nn, &training_data, 5000);
     
     println!("\nResults:");
-    test_network(&nn, &training_data);
+    test_network(&mut nn, &training_data);
 }
 
 fn solve_or_problem() {
@@ -107,7 +107,7 @@ fn solve_or_problem() {
     train_network(&mut nn, &training_data, 5000);
     
     println!("\nResults:");
-    test_network(&nn, &training_data);
+    test_network(&mut nn, &training_data);
 }
 
 fn demonstrate_hebbian_learning() {
@@ -232,7 +232,7 @@ fn train_network(nn: &mut NeuralNetwork, training_data: &[(Vec<f64>, Vec<f64>)],
     }
 }
 
-fn test_network(nn: &NeuralNetwork, test_data: &[(Vec<f64>, Vec<f64>)]) {
+fn test_network(nn: &mut NeuralNetwork, test_data: &[(Vec<f64>, Vec<f64>)]) {
     for (inputs, expected) in test_data {
         let prediction = nn.predict(inputs);
         let predicted_binary = if prediction[0] > 0.5 { 1.0 } else { 0.0 };

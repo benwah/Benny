@@ -109,7 +109,7 @@ impl NetworkComposer {
     }
 
     /// Forward propagation through the entire network composition
-    pub fn forward(&self, inputs: &HashMap<String, Vec<f64>>) -> Result<HashMap<String, Vec<f64>>, String> {
+    pub fn forward(&mut self, inputs: &HashMap<String, Vec<f64>>) -> Result<HashMap<String, Vec<f64>>, String> {
         let mut network_outputs: HashMap<String, Vec<f64>> = HashMap::new();
         
         // Initialize with external inputs
@@ -122,7 +122,7 @@ impl NetworkComposer {
 
         // Execute networks in topological order
         for network_name in &self.execution_order {
-            let network = &self.networks[network_name];
+            let network = self.networks.get_mut(network_name).unwrap();
             
             // Prepare inputs for this network
             let mut network_inputs = vec![0.0; network.get_layers()[0]];

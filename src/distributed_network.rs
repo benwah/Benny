@@ -817,7 +817,7 @@ impl DistributedNetwork {
                 let data_f64: Vec<f64> = data.iter().map(|&x| x as f64).collect();
                 
                 // Process through our network
-                let network = self.network.lock().unwrap();
+                let mut network = self.network.lock().unwrap();
                 let (_, output) = network.forward(&data_f64);
                 drop(network);
                 
