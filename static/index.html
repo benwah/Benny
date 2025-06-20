@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Network Input Server</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .status-bar {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background: #44ff44;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .timestamp {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .inputs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .input-control {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease;
+        }
+
+        .input-control:hover {
+            transform: translateY(-2px);
+        }
+
+        .input-label {
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .input-value {
+            font-size: 1.2em;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .slider-container {
+            position: relative;
+            margin: 15px 0;
+        }
+
+        .slider {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd8;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .control-panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .control-panel h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .global-controls {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .log-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-timestamp {
+            color: #666;
+            margin-right: 10px;
+        }
+
+        .visualization {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .input-bars {
+            display: flex;
+            gap: 10px;
+            height: 100px;
+            align-items: flex-end;
+            margin-top: 15px;
+        }
+
+        .input-bar {
+            flex: 1;
+            background: linear-gradient(to top, #667eea, #764ba2);
+            border-radius: 4px 4px 0 0;
+            transition: height 0.3s ease;
+            min-height: 5px;
+            position: relative;
+        }
+
+        .input-bar-label {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.8em;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .inputs-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .global-controls {
+                flex-direction: column;
+            }
+            
+            .status-bar {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 Neural Network Input Server</h1>
+            <p>Real-time input control for distributed neural networks</p>
+        </div>
+
+        <div class="status-bar">
+            <div class="connection-status">
+                <div class="status-indicator" id="connectionStatus"></div>
+                <span id="connectionText">Connecting...</span>
+            </div>
+            <div class="timestamp" id="lastUpdate">Last update: Never</div>
+        </div>
+
+        <div class="inputs-grid" id="inputsGrid">
+            <!-- Input controls will be dynamically generated here -->
+        </div>
+
+        <div class="control-panel">
+            <h3>Global Controls</h3>
+            <div class="global-controls">
+                <button class="btn btn-primary" onclick="resetAllInputs()">Reset All</button>
+                <button class="btn btn-primary" onclick="randomizeInputs()">Randomize</button>
+                <button class="btn btn-secondary" onclick="setAllInputs(0.5)">Set All to 0.5</button>
+                <button class="btn btn-secondary" onclick="setAllInputs(1.0)">Set All to 1.0</button>
+                <button class="btn btn-secondary" onclick="toggleAutoMode()">
+                    <span id="autoModeText">Start Auto Mode</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="visualization">
+            <h3>Input Visualization</h3>
+            <div class="input-bars" id="inputBars">
+                <!-- Visualization bars will be generated here -->
+            </div>
+        </div>
+
+        <div class="log-container">
+            <h3>Activity Log</h3>
+            <div id="logEntries"></div>
+        </div>
+    </div>
+
+    <script>
+        class InputServer {
+            constructor() {
+                this.ws = null;
+                this.inputs = [];
+                this.connected = false;
+                this.autoMode = false;
+                this.autoInterval = null;
+                this.reconnectAttempts = 0;
+                this.maxReconnectAttempts = 5;
+                
+                this.init();
+            }
+
+            init() {
+                this.connectWebSocket();
+                this.setupEventListeners();
+                this.log('InputServer initialized');
+            }
+
+            connectWebSocket() {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws`;
+                
+                this.log(`Connecting to WebSocket: ${wsUrl}`);
+                
+                try {
+                    this.ws = new WebSocket(wsUrl);
+                    
+                    this.ws.onopen = () => {
+                        this.log('WebSocket connected');
+                        this.connected = true;
+                        this.reconnectAttempts = 0;
+                        this.updateConnectionStatus();
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        try {
+                            const message = JSON.parse(event.data);
+                            this.handleMessage(message);
+                        } catch (e) {
+                            this.log(`Error parsing message: ${e.message}`);
+                        }
+                    };
+                    
+                    this.ws.onclose = () => {
+                        this.log('WebSocket disconnected');
+                        this.connected = false;
+                        this.updateConnectionStatus();
+                        this.attemptReconnect();
+                    };
+                    
+                    this.ws.onerror = (error) => {
+                        this.log(`WebSocket error: ${error}`);
+                    };
+                } catch (e) {
+                    this.log(`Failed to create WebSocket: ${e.message}`);
+                    this.attemptReconnect();
+                }
+            }
+
+            attemptReconnect() {
+                if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                    this.reconnectAttempts++;
+                    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+                    this.log(`Attempting to reconnect in ${delay/1000}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+                    
+                    setTimeout(() => {
+                        this.connectWebSocket();
+                    }, delay);
+                } else {
+                    this.log('Max reconnection attempts reached. Please refresh the page.');
+                }
+            }
+
+            handleMessage(message) {
+                switch (message.type) {
+                    case 'state_update':
+                        this.updateInputs(message.data);
+                        break;
+                    default:
+                        this.log(`Unknown message type: ${message.type}`);
+                }
+            }
+
+            updateInputs(state) {
+                this.inputs = state.inputs;
+                this.connected = state.connected;
+                
+                this.updateConnectionStatus();
+                this.updateInputControls();
+                this.updateVisualization();
+                this.updateTimestamp();
+            }
+
+            updateConnectionStatus() {
+                const indicator = document.getElementById('connectionStatus');
+                const text = document.getElementById('connectionText');
+                
+                if (this.connected) {
+                    indicator.classList.add('connected');
+                    text.textContent = 'Connected to Neural Network';
+                } else {
+                    indicator.classList.remove('connected');
+                    text.textContent = 'Disconnected';
+                }
+            }
+
+            updateInputControls() {
+                const grid = document.getElementById('inputsGrid');
+                
+                // Clear existing controls
+                grid.innerHTML = '';
+                
+                this.inputs.forEach((value, index) => {
+                    const control = this.createInputControl(index, value);
+                    grid.appendChild(control);
+                });
+            }
+
+            createInputControl(index, value) {
+                const div = document.createElement('div');
+                div.className = 'input-control';
+                
+                div.innerHTML = `
+                    <div class="input-label">
+                        Input ${index}
+                        <span class="input-value" id="value-${index}">${value.toFixed(3)}</span>
+                    </div>
+                    <div class="slider-container">
+                        <input type="range" 
+                               class="slider" 
+                               id="slider-${index}"
+                               min="0" 
+                               max="1" 
+                               step="0.001" 
+                               value="${value}">
+                    </div>
+                    <div class="button-group">
+                        <button class="btn btn-secondary" onclick="inputServer.setInput(${index}, 0)">0</button>
+                        <button class="btn btn-secondary" onclick="inputServer.setInput(${index}, 0.5)">0.5</button>
+                        <button class="btn btn-secondary" onclick="inputServer.setInput(${index}, 1)">1</button>
+                    </div>
+                `;
+                
+                // Add event listener for slider
+                const slider = div.querySelector(`#slider-${index}`);
+                slider.addEventListener('input', (e) => {
+                    const newValue = parseFloat(e.target.value);
+                    this.setInput(index, newValue);
+                });
+                
+                return div;
+            }
+
+            updateVisualization() {
+                const barsContainer = document.getElementById('inputBars');
+                barsContainer.innerHTML = '';
+                
+                this.inputs.forEach((value, index) => {
+                    const bar = document.createElement('div');
+                    bar.className = 'input-bar';
+                    bar.style.height = `${value * 100}%`;
+                    
+                    const label = document.createElement('div');
+                    label.className = 'input-bar-label';
+                    label.textContent = `I${index}`;
+                    
+                    bar.appendChild(label);
+                    barsContainer.appendChild(bar);
+                });
+            }
+
+            updateTimestamp() {
+                const timestamp = document.getElementById('lastUpdate');
+                timestamp.textContent = `Last update: ${new Date().toLocaleTimeString()}`;
+            }
+
+            setInput(index, value) {
+                if (index >= 0 && index < this.inputs.length) {
+                    this.inputs[index] = value;
+                    
+                    // Update UI immediately for responsiveness
+                    const valueDisplay = document.getElementById(`value-${index}`);
+                    const slider = document.getElementById(`slider-${index}`);
+                    
+                    if (valueDisplay) valueDisplay.textContent = value.toFixed(3);
+                    if (slider) slider.value = value;
+                    
+                    this.updateVisualization();
+                    
+                    // Send to server
+                    this.sendInputCommand(index, value);
+                    this.log(`Set input ${index} to ${value.toFixed(3)}`);
+                }
+            }
+
+            sendInputCommand(index, value) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    const command = {
+                        type: 'input_command',
+                        data: {
+                            input_index: index,
+                            value: value,
+                            timestamp: Date.now()
+                        }
+                    };
+                    
+                    this.ws.send(JSON.stringify(command));
+                } else {
+                    this.log('Cannot send command: WebSocket not connected');
+                }
+            }
+
+            setupEventListeners() {
+                // Global keyboard shortcuts
+                document.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey || e.metaKey) {
+                        switch (e.key) {
+                            case 'r':
+                                e.preventDefault();
+                                this.resetAllInputs();
+                                break;
+                            case 'a':
+                                e.preventDefault();
+                                this.toggleAutoMode();
+                                break;
+                        }
+                    }
+                });
+            }
+
+            log(message) {
+                const logContainer = document.getElementById('logEntries');
+                const entry = document.createElement('div');
+                entry.className = 'log-entry';
+                
+                const timestamp = new Date().toLocaleTimeString();
+                entry.innerHTML = `<span class="log-timestamp">[${timestamp}]</span>${message}`;
+                
+                logContainer.appendChild(entry);
+                logContainer.scrollTop = logContainer.scrollHeight;
+                
+                // Keep only last 50 entries
+                while (logContainer.children.length > 50) {
+                    logContainer.removeChild(logContainer.firstChild);
+                }
+            }
+        }
+
+        // Global functions for button handlers
+        let inputServer;
+
+        function resetAllInputs() {
+            for (let i = 0; i < inputServer.inputs.length; i++) {
+                inputServer.setInput(i, 0);
+            }
+        }
+
+        function randomizeInputs() {
+            for (let i = 0; i < inputServer.inputs.length; i++) {
+                inputServer.setInput(i, Math.random());
+            }
+        }
+
+        function setAllInputs(value) {
+            for (let i = 0; i < inputServer.inputs.length; i++) {
+                inputServer.setInput(i, value);
+            }
+        }
+
+        function toggleAutoMode() {
+            inputServer.autoMode = !inputServer.autoMode;
+            const button = document.getElementById('autoModeText');
+            
+            if (inputServer.autoMode) {
+                button.textContent = 'Stop Auto Mode';
+                inputServer.autoInterval = setInterval(() => {
+                    randomizeInputs();
+                }, 2000);
+                inputServer.log('Auto mode started');
+            } else {
+                button.textContent = 'Start Auto Mode';
+                if (inputServer.autoInterval) {
+                    clearInterval(inputServer.autoInterval);
+                    inputServer.autoInterval = null;
+                }
+                inputServer.log('Auto mode stopped');
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            inputServer = new InputServer();
+        });
+    </script>
+</body>
+</html>

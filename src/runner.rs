@@ -1,12 +1,12 @@
 use crate::cli::*;
-use crate::neural_network::{NeuralNetwork, HebbianLearningMode};
-use crate::server::{run_daemon, ServerConfig};
-use std::fs;
-use std::path::PathBuf;
-use std::time::Instant;
-use std::io::{self, Write};
+use crate::neural_network::{HebbianLearningMode, NeuralNetwork};
+use crate::server::{ServerConfig, run_daemon};
 use chrono::Utc;
 use rand::Rng;
+use std::fs;
+use std::io::{self, Write};
+use std::path::PathBuf;
+use std::time::Instant;
 
 pub fn run_training(
     config_path: PathBuf,
@@ -21,20 +21,24 @@ pub fn run_training(
     // Load configuration
     let config = NetworkConfig::load_from_file(&config_path)?;
     println!("✅ Loaded configuration from: {}", config_path.display());
-    
+
     // Load training data
     let training_data = if data_path.extension().and_then(|s| s.to_str()) == Some("csv") {
         TrainingData::load_from_csv(&data_path)?
     } else {
         TrainingData::load_from_json(&data_path)?
     };
-    println!("✅ Loaded {} training samples from: {}", training_data.inputs.len(), data_path.display());
+    println!(
+        "✅ Loaded {} training samples from: {}",
+        training_data.inputs.len(),
+        data_path.display()
+    );
 
     // Create network
     let mut network = config.create_network()?;
     println!("✅ Created network: {}", network.info());
     println!("   Parameters: {}", network.num_parameters());
-    
+
     if verbose {
         println!("   Architecture: {:?}", config.architecture);
         println!("   Learning rate: {}", config.learning_rate);
@@ -45,7 +49,7 @@ pub fn run_training(
     // Split data for validation if specified
     let validation_split = config.training.validation_split;
     let split_index = ((1.0 - validation_split) * training_data.inputs.len() as f64) as usize;
-    
+
     let train_inputs = &training_data.inputs[..split_index];
     let train_targets = &training_data.targets[..split_index];
     let val_inputs = &training_data.inputs[split_index..];
@@ -88,7 +92,8 @@ pub fn run_training(
         if !val_inputs.is_empty() {
             for i in 0..val_inputs.len() {
                 let (output, _) = network.forward(&val_inputs[i]);
-                let error: f64 = output.iter()
+                let error: f64 = output
+                    .iter()
                     .zip(val_targets[i].iter())
                     .map(|(o, t)| (o - t).powi(2))
                     .sum();
@@ -102,8 +107,10 @@ pub fn run_training(
             if val_inputs.is_empty() {
                 println!("   Epoch {}: Train Error = {:.6}", epoch, avg_train_error);
             } else {
-                println!("   Epoch {}: Train Error = {:.6}, Val Error = {:.6}", 
-                        epoch, avg_train_error, total_val_error);
+                println!(
+                    "   Epoch {}: Train Error = {:.6}, Val Error = {:.6}",
+                    epoch, avg_train_error, total_val_error
+                );
             }
         }
 
@@ -115,8 +122,10 @@ pub fn run_training(
             } else {
                 patience_counter += 1;
                 if patience_counter >= config.training.early_stop_patience {
-                    println!("🛑 Early stopping at epoch {} (best val error: {:.6})", 
-                            epoch, best_val_error);
+                    println!(
+                        "🛑 Early stopping at epoch {} (best val error: {:.6})",
+                        epoch, best_val_error
+                    );
                     break;
                 }
             }
@@ -124,13 +133,19 @@ pub fn run_training(
     }
 
     let training_time = start_time.elapsed();
-    println!("\n✅ Training completed in {:.2}s", training_time.as_secs_f64());
+    println!(
+        "\n✅ Training completed in {:.2}s",
+        training_time.as_secs_f64()
+    );
 
     // Save model if output path specified
     if let Some(output_path) = output_path {
         if output_path.extension().and_then(|s| s.to_str()) == Some("bin") {
             network.save_to_binary(&output_path)?;
-            println!("💾 Model saved to: {} (binary format)", output_path.display());
+            println!(
+                "💾 Model saved to: {} (binary format)",
+                output_path.display()
+            );
         } else {
             network.save_to_file(&output_path)?;
             println!("💾 Model saved to: {} (JSON format)", output_path.display());
@@ -190,7 +205,10 @@ pub fn run_prediction(
     let processing_time = start_time.elapsed();
 
     // Calculate confidence (simple heuristic)
-    let confidence = output.iter().map(|&x| (x - 0.5).abs() + 0.5).fold(0.0, f64::max);
+    let confidence = output
+        .iter()
+        .map(|&x| (x - 0.5).abs() + 0.5)
+        .fold(0.0, f64::max);
 
     let result = PredictionResult {
         timestamp: Utc::now(),
@@ -209,9 +227,14 @@ pub fn run_prediction(
         OutputFormat::Csv => {
             println!("📤 Result (CSV):");
             println!("timestamp,input,output,confidence,processing_time_ms");
-            println!("{},{:?},{:?},{:.4},{:.2}", 
-                    result.timestamp, result.input, result.output, 
-                    result.confidence, result.processing_time_ms);
+            println!(
+                "{},{:?},{:?},{:.4},{:.2}",
+                result.timestamp,
+                result.input,
+                result.output,
+                result.confidence,
+                result.processing_time_ms
+            );
         }
         OutputFormat::Plain => {
             println!("📤 Result:");
@@ -269,7 +292,10 @@ pub fn create_sample_config(
     };
 
     config.save_to_file(&output_path)?;
-    println!("✅ Sample configuration saved to: {}", output_path.display());
+    println!(
+        "✅ Sample configuration saved to: {}",
+        output_path.display()
+    );
     println!("   Network type: {:?}", network_type);
     println!("   Architecture: {:?}", config.architecture);
 
@@ -391,7 +417,7 @@ pub fn run_benchmark(
 
     let config = NetworkConfig::load_from_file(&config_path)?;
     let mut network = config.create_network()?;
-    
+
     println!("✅ Network: {}", network.info());
     println!("   Parameters: {}", network.num_parameters());
     println!("   Iterations: {}", iterations);
@@ -399,49 +425,59 @@ pub fn run_benchmark(
     // Generate random test data
     let mut rng = rand::thread_rng();
     let test_inputs: Vec<Vec<f64>> = (0..iterations)
-        .map(|_| (0..config.architecture[0])
-            .map(|_| rng.gen_range(0.0..1.0))
-            .collect())
+        .map(|_| {
+            (0..config.architecture[0])
+                .map(|_| rng.gen_range(0.0..1.0))
+                .collect()
+        })
         .collect();
 
     // Benchmark forward pass
     println!("\n🚀 Benchmarking forward pass...");
     let start_time = Instant::now();
-    
+
     for input in &test_inputs {
         let _ = network.forward(input);
     }
-    
+
     let forward_time = start_time.elapsed();
     let forward_per_sec = iterations as f64 / forward_time.as_secs_f64();
-    
-    println!("   Forward pass: {:.2}ms total, {:.0} ops/sec", 
-            forward_time.as_secs_f64() * 1000.0, forward_per_sec);
+
+    println!(
+        "   Forward pass: {:.2}ms total, {:.0} ops/sec",
+        forward_time.as_secs_f64() * 1000.0,
+        forward_per_sec
+    );
 
     // Benchmark training
     println!("\n📈 Benchmarking training...");
     let targets: Vec<Vec<f64>> = (0..iterations)
-        .map(|_| (0..*config.architecture.last().unwrap())
-            .map(|_| rng.gen_range(0.0..1.0))
-            .collect())
+        .map(|_| {
+            (0..*config.architecture.last().unwrap())
+                .map(|_| rng.gen_range(0.0..1.0))
+                .collect()
+        })
         .collect();
 
     let start_time = Instant::now();
-    
+
     for (input, target) in test_inputs.iter().zip(targets.iter()) {
         let _ = network.train(input, target);
     }
-    
+
     let train_time = start_time.elapsed();
     let train_per_sec = iterations as f64 / train_time.as_secs_f64();
-    
-    println!("   Training: {:.2}ms total, {:.0} ops/sec", 
-            train_time.as_secs_f64() * 1000.0, train_per_sec);
+
+    println!(
+        "   Training: {:.2}ms total, {:.0} ops/sec",
+        train_time.as_secs_f64() * 1000.0,
+        train_per_sec
+    );
 
     // Memory usage estimation
     let param_count = network.num_parameters();
     let memory_mb = (param_count * 8) as f64 / 1024.0 / 1024.0; // 8 bytes per f64
-    
+
     println!("\n💾 Memory Usage:");
     println!("   Parameters: {}", param_count);
     println!("   Estimated memory: {:.2} MB", memory_mb);
@@ -461,7 +497,7 @@ pub fn run_demo(demo_type: DemoType) -> Result<(), Box<dyn std::error::Error>> {
         DemoType::Xor => {
             println!("🔀 XOR Problem Demo");
             println!("==================");
-            
+
             let mut nn = NeuralNetwork::new(2, 4, 1, 0.5);
             let training_data = vec![
                 (vec![0.0, 0.0], vec![0.0]),
@@ -469,7 +505,7 @@ pub fn run_demo(demo_type: DemoType) -> Result<(), Box<dyn std::error::Error>> {
                 (vec![1.0, 0.0], vec![1.0]),
                 (vec![1.0, 1.0], vec![0.0]),
             ];
-            
+
             println!("Training XOR network...");
             for epoch in 0..1000 {
                 let mut total_error = 0.0;
@@ -480,25 +516,24 @@ pub fn run_demo(demo_type: DemoType) -> Result<(), Box<dyn std::error::Error>> {
                     println!("  Epoch {}: Error = {:.6}", epoch, total_error);
                 }
             }
-            
+
             println!("\nResults:");
             for (inputs, expected) in &training_data {
                 let (output, _) = nn.forward(inputs);
                 let predicted = if output[0] > 0.5 { 1.0 } else { 0.0 };
-                println!("  [{:.0}, {:.0}] -> Expected: {:.0}, Got: {:.3} ({:.0})", 
-                        inputs[0], inputs[1], expected[0], output[0], predicted);
+                println!(
+                    "  [{:.0}, {:.0}] -> Expected: {:.0}, Got: {:.3} ({:.0})",
+                    inputs[0], inputs[1], expected[0], output[0], predicted
+                );
             }
         }
         DemoType::Hebbian => {
             println!("🧠 Hebbian Learning Demo");
             println!("=======================");
-            
-            let mut nn = NeuralNetwork::with_layers_and_mode(
-                &[2, 3, 1], 
-                0.05, 
-                HebbianLearningMode::Oja
-            );
-            
+
+            let mut nn =
+                NeuralNetwork::with_layers_and_mode(&[2, 3, 1], 0.05, HebbianLearningMode::Oja);
+
             println!("Training with Hebbian learning...");
             for i in 0..50 {
                 nn.train_unsupervised(&[1.0, 1.0]);
@@ -511,25 +546,28 @@ pub fn run_demo(demo_type: DemoType) -> Result<(), Box<dyn std::error::Error>> {
         DemoType::Serialization => {
             println!("💾 Serialization Demo");
             println!("====================");
-            
+
             let mut nn = NeuralNetwork::new(2, 3, 1, 0.1);
-            
+
             // Train briefly
             for _ in 0..100 {
                 nn.train(&[0.5, 0.8], &[0.7]);
             }
-            
+
             let (original_output, _) = nn.forward(&[0.5, 0.8]);
             println!("Original output: {:?}", original_output);
-            
+
             // Save and load
             nn.save_to_file("demo_network.json")?;
             let mut loaded_nn = NeuralNetwork::load_from_file("demo_network.json")?;
             let (loaded_output, _) = loaded_nn.forward(&[0.5, 0.8]);
-            
+
             println!("Loaded output: {:?}", loaded_output);
-            println!("Difference: {:.10}", (original_output[0] - loaded_output[0]).abs());
-            
+            println!(
+                "Difference: {:.10}",
+                (original_output[0] - loaded_output[0]).abs()
+            );
+
             // Cleanup
             let _ = fs::remove_file("demo_network.json");
         }
@@ -537,7 +575,7 @@ pub fn run_demo(demo_type: DemoType) -> Result<(), Box<dyn std::error::Error>> {
             println!("Demo type not implemented yet");
         }
     }
-    
+
     Ok(())
 }
 
@@ -560,7 +598,10 @@ pub fn run_server(
 
     // Create or load network
     let network = if let Some(model_path) = model_path {
-        println!("📂 Loading pre-trained model from: {}", model_path.display());
+        println!(
+            "📂 Loading pre-trained model from: {}",
+            model_path.display()
+        );
         NeuralNetwork::load_from_file(&model_path)?
     } else {
         println!("🆕 Creating new network from configuration");
@@ -602,15 +643,17 @@ pub fn run_server(
         }
     }
 
-    println!("🌐 Server will listen on: {}:{}", server_config.address, server_config.port);
+    println!(
+        "🌐 Server will listen on: {}:{}",
+        server_config.address, server_config.port
+    );
     println!("📡 Using Neural Network Protocol (NNP)");
     println!();
 
     // Start the server using async runtime
     let rt = tokio::runtime::Runtime::new()?;
-    rt.block_on(async {
-        run_daemon(network, server_config).await
-    }).map_err(|e| format!("Server error: {:?}", e))?;
+    rt.block_on(async { run_daemon(network, server_config).await })
+        .map_err(|e| format!("Server error: {:?}", e))?;
 
     Ok(())
 }
