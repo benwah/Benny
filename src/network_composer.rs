@@ -263,11 +263,8 @@ impl NetworkComposer {
         }
         
         for connection in &self.connections {
-            if connection.source_network == from {
-                if connection.target_network == to || 
-                   self.can_reach(&connection.target_network, to) {
-                    return true;
-                }
+            if connection.source_network == from && (connection.target_network == to || self.can_reach(&connection.target_network, to)) {
+                return true;
             }
         }
         

@@ -109,8 +109,8 @@ impl NeuralNetwork {
         
         // Initialize biases for each layer (except input)
         let mut biases: Vec<Vec<f64>> = Vec::new();
-        for i in 1..layers.len() {
-            let layer_biases: Vec<f64> = (0..layers[i]).map(|_| rng.gen_range(-1.0..1.0)).collect();
+        for &layer_size in layers.iter().skip(1) {
+            let layer_biases: Vec<f64> = (0..layer_size).map(|_| rng.gen_range(-1.0..1.0)).collect();
             biases.push(layer_biases);
         }
         
@@ -119,9 +119,9 @@ impl NeuralNetwork {
         let history_size = 20; // Remember more activations for better correlation detection
         let mut activation_history = Vec::new();
         
-        for i in 0..layers.len() {
+        for &layer_size in layers.iter() {
             // Activation history for each neuron in each layer
-            let layer_history = vec![vec![0.0; history_size]; layers[i]];
+            let layer_history = vec![vec![0.0; history_size]; layer_size];
             activation_history.push(layer_history);
         }
         
@@ -1114,7 +1114,7 @@ mod tests {
         
         assert_eq!(prediction.len(), 2);
         for &output in &prediction {
-            assert!(output >= 0.0 && output <= 1.0);
+            assert!((0.0..=1.0).contains(&output));
         }
     }
     
