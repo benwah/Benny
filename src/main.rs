@@ -21,6 +21,11 @@ fn main() {
     
     // Demonstrate OR problem
     solve_or_problem();
+    
+    println!("\n{}", "=".repeat(50));
+    
+    // Demonstrate Hebbian learning
+    demonstrate_hebbian_learning();
 }
 
 fn demonstrate_flexible_architecture() {
@@ -103,6 +108,36 @@ fn solve_or_problem() {
     
     println!("\nResults:");
     test_network(&nn, &training_data);
+}
+
+fn demonstrate_hebbian_learning() {
+    println!("\n🧠 Hebbian Learning Preview");
+    println!("---------------------------");
+    println!("\"Neurons that fire together, wire together\"");
+    
+    let mut hebbian_nn = NeuralNetwork::with_hebbian_learning(&[2, 3, 1], 0.1, 0.05, 5, 0.001);
+    println!("{}", hebbian_nn.info());
+    println!("Hebbian rate: {}, History size: {}", hebbian_nn.get_hebbian_rate(), hebbian_nn.get_history_size());
+    
+    // Show weight before Hebbian learning
+    let initial_weight = hebbian_nn.get_weight(0, 0, 0);
+    println!("Initial weight (input[0] -> hidden[0]): {:.4}", initial_weight);
+    
+    // Apply Hebbian learning with correlated inputs
+    println!("Training with correlated inputs [1.0, 1.0]...");
+    for _ in 0..20 {
+        hebbian_nn.train_hebbian(&[1.0, 1.0]); // Both inputs high
+    }
+    
+    let final_weight = hebbian_nn.get_weight(0, 0, 0);
+    let correlation = hebbian_nn.get_neuron_correlation(0, 0, 0, 1);
+    
+    println!("After Hebbian training:");
+    println!("  Final weight: {:.4}", final_weight);
+    println!("  Input correlation: {:.4}", correlation);
+    println!("  Weight change: {:.4}", final_weight - initial_weight);
+    
+    println!("\n💡 Run 'cargo run --example hebbian_learning' for full demonstration!");
 }
 
 fn train_network(nn: &mut NeuralNetwork, training_data: &[(Vec<f64>, Vec<f64>)], epochs: usize) {

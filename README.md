@@ -5,7 +5,10 @@ A basic implementation of a feedforward neural network written in Rust from scra
 ## Features
 
 - **Flexible Architecture**: Support for any number of layers and neurons per layer
-- **Multiple Constructors**: Simple `new()` for basic networks, `with_layers()` for complex architectures
+- **Hebbian Learning**: Biologically-inspired "neurons that fire together, wire together" learning
+- **Activation History**: Track neuron activations over time for correlation-based learning
+- **Hybrid Training**: Combine backpropagation with Hebbian learning for enhanced performance
+- **Multiple Constructors**: Simple `new()` for basic networks, `with_layers()` for complex architectures, `with_hebbian_learning()` for bio-inspired networks
 - **Deep Networks**: Support for multiple hidden layers of varying sizes
 - **Multi-Input/Output**: Handle complex classification and regression problems
 - **Sigmoid Activation**: Uses sigmoid activation function with its derivative
@@ -146,6 +149,59 @@ NeuralNetwork::with_layers(layer_sizes: &[usize], learning_rate: f64)
 - `num_hidden_layers(&self) -> usize`: Get number of hidden layers
 - `num_parameters(&self) -> usize`: Get total number of parameters (weights + biases)
 
+## Hebbian Learning
+
+This neural network implementation includes biologically-inspired Hebbian learning, following the principle "neurons that fire together, wire together."
+
+### Hebbian Learning Constructor
+
+```rust
+// Create a network with Hebbian learning capabilities
+let mut nn = NeuralNetwork::with_hebbian_learning(
+    &[2, 4, 1],  // Layer sizes
+    0.1,         // Backpropagation learning rate
+    0.05,        // Hebbian learning rate
+    10,          // History size (number of recent activations to remember)
+    0.001        // Weight decay rate (prevents unbounded growth)
+);
+```
+
+### Hebbian Learning Methods
+
+- `train_hebbian(&mut self, inputs: &[f64])`: Pure Hebbian learning (unsupervised)
+- `train_hybrid(&mut self, inputs: &[f64], targets: &[f64]) -> f64`: Combine backpropagation + Hebbian learning
+- `get_neuron_correlation(&self, layer1: usize, neuron1: usize, layer2: usize, neuron2: usize) -> f64`: Calculate correlation between neurons
+- `get_average_activation(&self, layer: usize, neuron: usize) -> f64`: Get average activation for a neuron
+- `reset_activation_history(&mut self)`: Reset activation history for fresh experiments
+
+### Hebbian Learning Examples
+
+```rust
+use neural_network::NeuralNetwork;
+
+// Create Hebbian network
+let mut nn = NeuralNetwork::with_hebbian_learning(&[2, 3, 1], 0.1, 0.05, 10, 0.001);
+
+// Pure Hebbian learning (unsupervised)
+for _ in 0..100 {
+    nn.train_hebbian(&[1.0, 1.0]); // Train with correlated inputs
+}
+
+// Check correlation between input neurons
+let correlation = nn.get_neuron_correlation(0, 0, 0, 1);
+println!("Input correlation: {:.4}", correlation);
+
+// Hybrid learning (supervised + unsupervised)
+let error = nn.train_hybrid(&[1.0, 0.0], &[1.0]);
+```
+
+### Key Concepts
+
+- **Correlation-based Learning**: Weights strengthen when neurons are co-active
+- **Activation History**: Network remembers recent neuron activations for correlation calculation
+- **Weight Decay**: Prevents unbounded weight growth in Hebbian learning
+- **Hybrid Training**: Combines supervised (backpropagation) and unsupervised (Hebbian) learning
+
 ## Examples
 
 Run the examples to see the neural network in action:
@@ -159,6 +215,9 @@ cargo run --example simple_example
 
 # Flexible architecture demonstration
 cargo run --example flexible_architecture
+
+# Hebbian learning demonstration
+cargo run --example hebbian_learning
 ```
 
 ### Included Problems
