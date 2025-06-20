@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 rand = "0.8"
+rayon = "1.8"
 
 [[example]]
 name = "simple_example"
@@ -13,3 +14,11 @@ path = "examples/simple_example.rs"
 [[example]]
 name = "flexible_architecture"
 path = "examples/flexible_architecture.rs"
+
+[[example]]
+name = "multi_core_performance"
+path = "examples/multi_core_performance.rs"
+
+[[example]]
+name = "benchmark_parallel"
+path = "examples/benchmark_parallel.rs"

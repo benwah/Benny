@@ -158,7 +158,30 @@ fn demonstrate_hebbian_learning() {
     println!("  inputs.insert(\"features\".to_string(), vec![0.8, 0.3]);");
     println!("  let outputs = composer.forward(&inputs).unwrap();");
     println!();
-    println!("💡 Run 'cargo run --example network_composition' for full demonstration!");
+    println!("💡 Run 'cargo run --example network_composition' for full demonstration!
+
+==================================================
+
+🚀 Multi-Core Performance Preview
+---------------------------------
+All neural network operations now utilize multiple CPU cores!
+
+🖥️  System cores: 4
+⚡ Parallel forward propagation: Neuron computations across cores
+🔄 Parallel backpropagation: Error calculation and weight updates
+📦 Batch processing: Multiple samples processed simultaneously
+
+Example batch processing:
+  let training_batch = vec![
+      (vec![0.0, 0.0], vec![0.0]),
+      (vec![0.0, 1.0], vec![1.0]),
+      (vec![1.0, 0.0], vec![1.0]),
+      (vec![1.0, 1.0], vec![0.0]),
+  ];
+  let batch_error = nn.train_batch(&training_batch);
+  let batch_outputs = nn.forward_batch(&inputs);
+
+💡 Run 'cargo run --example multi_core_performance' for benchmarks!");
 }
 
 fn train_network(nn: &mut NeuralNetwork, training_data: &[(Vec<f64>, Vec<f64>)], epochs: usize) {

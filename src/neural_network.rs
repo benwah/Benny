@@ -1,4 +1,5 @@
 use rand::Rng;
+use rayon::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct NeuralNetwork {
@@ -197,7 +198,7 @@ impl NeuralNetwork {
         (hidden, output)
     }
     
-    /// Forward propagation returning all layer activations (useful for deep networks)
+    /// Forward propagation returning all layer activations (optimized for multi-core)
     pub fn forward_all_layers(&self, inputs: &[f64]) -> Vec<Vec<f64>> {
         assert_eq!(inputs.len(), self.layers[0], "Input size mismatch");
         
@@ -206,16 +207,26 @@ impl NeuralNetwork {
         // Forward propagate through each layer
         for layer_idx in 0..self.weights.len() {
             let current_layer = &activations[layer_idx];
-            let mut next_layer = vec![0.0; self.layers[layer_idx + 1]];
             
-            // Calculate weighted sum + bias for each neuron in next layer
-            for to_neuron in 0..next_layer.len() {
-                let mut sum = self.biases[layer_idx][to_neuron];
-                for from_neuron in 0..current_layer.len() {
-                    sum += current_layer[from_neuron] * self.weights[layer_idx][from_neuron][to_neuron];
-                }
-                next_layer[to_neuron] = Self::sigmoid(sum);
-            }
+            // Parallel computation of next layer activations
+            let next_layer: Vec<f64> = (0..self.layers[layer_idx + 1])
+                .into_par_iter()
+                .map(|to_neuron| {
+                    // Calculate weighted sum + bias for this neuron
+                    let mut sum = self.biases[layer_idx][to_neuron];
+                    
+                    // Vectorized inner product using parallel iterator
+                    sum += current_layer
+                        .par_iter()
+                        .enumerate()
+                        .map(|(from_neuron, &activation)| {
+                            activation * self.weights[layer_idx][from_neuron][to_neuron]
+                        })
+                        .sum::<f64>();
+                    
+                    Self::sigmoid(sum)
+                })
+                .collect();
             
             activations.push(next_layer);
         }
@@ -250,34 +261,49 @@ impl NeuralNetwork {
             layer_errors[output_layer_idx][i] = error * Self::sigmoid_derivative(activations[output_layer_idx][i]);
         }
         
-        // Backpropagate errors through hidden layers
+        // Backpropagate errors through hidden layers using parallel processing
         for layer_idx in (1..self.layers.len() - 1).rev() {
-            layer_errors[layer_idx] = vec![0.0; self.layers[layer_idx]];
-            for neuron in 0..self.layers[layer_idx] {
-                let mut error = 0.0;
-                for next_neuron in 0..self.layers[layer_idx + 1] {
-                    error += layer_errors[layer_idx + 1][next_neuron] * self.weights[layer_idx][neuron][next_neuron];
-                }
-                layer_errors[layer_idx][neuron] = error * Self::sigmoid_derivative(activations[layer_idx][neuron]);
-            }
+            layer_errors[layer_idx] = (0..self.layers[layer_idx])
+                .into_par_iter()
+                .map(|neuron| {
+                    // Parallel computation of error for this neuron
+                    let error: f64 = (0..self.layers[layer_idx + 1])
+                        .into_par_iter()
+                        .map(|next_neuron| {
+                            layer_errors[layer_idx + 1][next_neuron] * self.weights[layer_idx][neuron][next_neuron]
+                        })
+                        .sum();
+                    
+                    error * Self::sigmoid_derivative(activations[layer_idx][neuron])
+                })
+                .collect();
         }
         
-        // Update weights and biases
+        // Update weights and biases using parallel processing
         for layer_idx in 0..self.weights.len() {
-            // Update weights
-            for from_neuron in 0..self.layers[layer_idx] {
-                for to_neuron in 0..self.layers[layer_idx + 1] {
-                    let weight_update = self.learning_rate * 
-                        layer_errors[layer_idx + 1][to_neuron] * 
-                        activations[layer_idx][from_neuron];
-                    self.weights[layer_idx][from_neuron][to_neuron] += weight_update;
-                }
-            }
+            // Parallel weight updates for each connection
+            self.weights[layer_idx]
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(from_neuron, weight_row)| {
+                    weight_row
+                        .par_iter_mut()
+                        .enumerate()
+                        .for_each(|(to_neuron, weight)| {
+                            let weight_update = self.learning_rate * 
+                                layer_errors[layer_idx + 1][to_neuron] * 
+                                activations[layer_idx][from_neuron];
+                            *weight += weight_update;
+                        });
+                });
             
-            // Update biases
-            for neuron in 0..self.layers[layer_idx + 1] {
-                self.biases[layer_idx][neuron] += self.learning_rate * layer_errors[layer_idx + 1][neuron];
-            }
+            // Parallel bias updates
+            self.biases[layer_idx]
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(neuron, bias)| {
+                    *bias += self.learning_rate * layer_errors[layer_idx + 1][neuron];
+                });
         }
         
         // Update legacy fields for backward compatibility
@@ -295,19 +321,29 @@ impl NeuralNetwork {
         // Store input activations in history
         self.store_activations(0, inputs);
         
-        // Forward propagate through each layer
+        // Forward propagate through each layer using parallel processing
         for layer_idx in 0..self.weights.len() {
             let current_layer = &activations[layer_idx];
-            let mut next_layer = vec![0.0; self.layers[layer_idx + 1]];
             
-            // Calculate weighted sum + bias for each neuron in next layer
-            for to_neuron in 0..next_layer.len() {
-                let mut sum = self.biases[layer_idx][to_neuron];
-                for from_neuron in 0..current_layer.len() {
-                    sum += current_layer[from_neuron] * self.weights[layer_idx][from_neuron][to_neuron];
-                }
-                next_layer[to_neuron] = Self::sigmoid(sum);
-            }
+            // Parallel computation of next layer activations
+            let next_layer: Vec<f64> = (0..self.layers[layer_idx + 1])
+                .into_par_iter()
+                .map(|to_neuron| {
+                    // Calculate weighted sum + bias for this neuron
+                    let mut sum = self.biases[layer_idx][to_neuron];
+                    
+                    // Vectorized inner product using parallel iterator
+                    sum += current_layer
+                        .par_iter()
+                        .enumerate()
+                        .map(|(from_neuron, &activation)| {
+                            activation * self.weights[layer_idx][from_neuron][to_neuron]
+                        })
+                        .sum::<f64>();
+                    
+                    Self::sigmoid(sum)
+                })
+                .collect();
             
             // Store activations in history
             self.store_activations(layer_idx + 1, &next_layer);
@@ -516,6 +552,50 @@ impl NeuralNetwork {
     /// Set weight decay rate
     pub fn set_decay_rate(&mut self, rate: f64) {
         self.decay_rate = rate;
+    }
+    
+    /// Parallel batch training - train on multiple samples simultaneously
+    pub fn train_batch(&mut self, batch: &[(Vec<f64>, Vec<f64>)]) -> f64 {
+        if batch.is_empty() {
+            return 0.0;
+        }
+        
+        // Process batch in parallel and collect errors
+        let total_error: f64 = batch
+            .par_iter()
+            .map(|(inputs, targets)| {
+                // Each thread gets its own copy of the network for forward pass
+                let activations = self.forward_all_layers(inputs);
+                
+                // Calculate error for this sample
+                let output = &activations[activations.len() - 1];
+                let mut sample_error = 0.0;
+                for i in 0..output.len() {
+                    let error = targets[i] - output[i];
+                    sample_error += error.powi(2);
+                }
+                sample_error / 2.0
+            })
+            .sum();
+        
+        // Sequential weight updates (to avoid race conditions)
+        // In practice, you'd accumulate gradients and apply them once
+        for (inputs, targets) in batch {
+            self.train(inputs, targets);
+        }
+        
+        total_error / batch.len() as f64
+    }
+    
+    /// Parallel batch forward propagation
+    pub fn forward_batch(&self, inputs_batch: &[Vec<f64>]) -> Vec<Vec<f64>> {
+        inputs_batch
+            .par_iter()
+            .map(|inputs| {
+                let activations = self.forward_all_layers(inputs);
+                activations[activations.len() - 1].clone() // Return only final output
+            })
+            .collect()
     }
     
     /// Get activation history for a specific neuron
