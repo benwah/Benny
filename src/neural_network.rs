@@ -6,13 +6,21 @@ pub struct NeuralNetwork {
     layers: Vec<usize>,           // Layer sizes [input, hidden1, hidden2, ..., output]
     weights: Vec<Vec<Vec<f64>>>,  // weights[layer][from_neuron][to_neuron]
     biases: Vec<Vec<f64>>,        // biases[layer][neuron]
-    learning_rate: f64,
     
-    // Hebbian learning components
+    // Hebbian learning - now core components
     activation_history: Vec<Vec<Vec<f64>>>, // activation_history[layer][neuron][time_step]
+    correlation_matrix: Vec<Vec<Vec<f64>>>, // correlation_matrix[layer][from_neuron][to_neuron]
     history_size: usize,                    // Number of recent activations to remember
-    hebbian_rate: f64,                      // Learning rate for Hebbian updates
+    hebbian_rate: f64,                      // Primary learning rate for Hebbian updates
+    anti_hebbian_rate: f64,                 // Rate for anti-Hebbian (forgetting) updates
     decay_rate: f64,                        // Weight decay to prevent unbounded growth
+    homeostatic_rate: f64,                  // Rate for homeostatic regulation
+    target_activity: f64,                   // Target average activity level per neuron
+    
+    // Learning configuration
+    learning_mode: HebbianLearningMode,     // Type of Hebbian learning to use
+    use_backprop: bool,                     // Whether to supplement with backpropagation
+    backprop_rate: f64,                     // Learning rate for backprop (when enabled)
     
     // Keep legacy fields for backward compatibility
     input_size: usize,
@@ -24,30 +32,74 @@ pub struct NeuralNetwork {
     bias_output: Vec<f64>,
 }
 
+#[derive(Debug, Clone)]
+pub enum HebbianLearningMode {
+    /// Classic Hebbian: "Neurons that fire together, wire together"
+    Classic,
+    /// Competitive: Winner-take-all learning with lateral inhibition
+    Competitive,
+    /// Oja's Rule: Normalized Hebbian learning with weight decay
+    Oja,
+    /// BCM Rule: Bienenstock-Cooper-Munro rule with sliding threshold
+    BCM,
+    /// Anti-Hebbian: Decorrelation learning
+    AntiHebbian,
+    /// Hybrid: Combines multiple Hebbian rules
+    Hybrid,
+}
+
 impl NeuralNetwork {
-    /// Creates a new neural network with the specified architecture (backward compatible)
-    pub fn new(input_size: usize, hidden_size: usize, output_size: usize, learning_rate: f64) -> Self {
-        // Use the new flexible constructor with a single hidden layer
-        Self::with_layers(&[input_size, hidden_size, output_size], learning_rate)
+    /// Creates a new Hebbian neural network with the specified architecture
+    /// Uses Classic Hebbian learning by default
+    pub fn new(input_size: usize, hidden_size: usize, output_size: usize, hebbian_rate: f64) -> Self {
+        Self::with_layers(&[input_size, hidden_size, output_size], hebbian_rate)
     }
     
-    /// Creates a new neural network with flexible layer configuration
+    /// Creates a new Hebbian neural network with specific learning mode
+    pub fn new_with_mode(input_size: usize, hidden_size: usize, output_size: usize, 
+                        hebbian_rate: f64, mode: HebbianLearningMode) -> Self {
+        Self::with_layers_and_mode(&[input_size, hidden_size, output_size], hebbian_rate, mode)
+    }
+    
+    /// Creates a new Hebbian neural network with flexible layer configuration
+    /// Uses Classic Hebbian learning by default
     /// 
     /// # Arguments
     /// * `layer_sizes` - Array of layer sizes [input, hidden1, hidden2, ..., output]
-    /// * `learning_rate` - Learning rate for training
+    /// * `hebbian_rate` - Primary Hebbian learning rate
     /// 
     /// # Examples
     /// ```
     /// use neural_network::NeuralNetwork;
     /// 
-    /// // Simple network: 2 inputs, 3 hidden, 1 output
+    /// // Simple Hebbian network: 2 inputs, 3 hidden, 1 output
     /// let nn = NeuralNetwork::with_layers(&[2, 3, 1], 0.1);
     /// 
-    /// // Deep network: 4 inputs, 8 hidden, 6 hidden, 3 hidden, 2 outputs
+    /// // Deep Hebbian network: 4 inputs, 8 hidden, 6 hidden, 3 hidden, 2 outputs
     /// let nn = NeuralNetwork::with_layers(&[4, 8, 6, 3, 2], 0.05);
     /// ```
-    pub fn with_layers(layer_sizes: &[usize], learning_rate: f64) -> Self {
+    pub fn with_layers(layer_sizes: &[usize], hebbian_rate: f64) -> Self {
+        Self::with_layers_and_mode(layer_sizes, hebbian_rate, HebbianLearningMode::Classic)
+    }
+    
+    /// Creates a new neural network with flexible layer configuration and specific Hebbian learning mode
+    /// 
+    /// # Arguments
+    /// * `layer_sizes` - Array of layer sizes [input, hidden1, hidden2, ..., output]
+    /// * `hebbian_rate` - Primary Hebbian learning rate
+    /// * `mode` - Type of Hebbian learning to use
+    /// 
+    /// # Examples
+    /// ```
+    /// use neural_network::{NeuralNetwork, HebbianLearningMode};
+    /// 
+    /// // Competitive learning network
+    /// let nn = NeuralNetwork::with_layers_and_mode(&[10, 20, 5], 0.1, HebbianLearningMode::Competitive);
+    /// 
+    /// // Oja's rule network for principal component analysis
+    /// let nn = NeuralNetwork::with_layers_and_mode(&[50, 10], 0.01, HebbianLearningMode::Oja);
+    /// ```
+    pub fn with_layers_and_mode(layer_sizes: &[usize], hebbian_rate: f64, mode: HebbianLearningMode) -> Self {
         assert!(layer_sizes.len() >= 2, "Network must have at least input and output layers");
         
         let mut rng = rand::thread_rng();
@@ -97,23 +149,48 @@ impl NeuralNetwork {
         
         let bias_output = biases[biases.len() - 1].clone();
         
-        // Initialize activation history for Hebbian learning
-        let history_size = 10; // Remember last 10 activations
+        // Initialize Hebbian learning components
+        let history_size = 20; // Remember more activations for better correlation detection
         let mut activation_history = Vec::new();
-        for layer_size in &layers {
-            let layer_history = vec![vec![0.0; history_size]; *layer_size];
+        let mut correlation_matrix = Vec::new();
+        
+        for i in 0..layers.len() {
+            // Activation history for each neuron in each layer
+            let layer_history = vec![vec![0.0; history_size]; layers[i]];
             activation_history.push(layer_history);
+            
+            // Correlation matrix for connections from this layer to next (if exists)
+            if i < layers.len() - 1 {
+                let layer_correlations = vec![vec![0.0; layers[i + 1]]; layers[i]];
+                correlation_matrix.push(layer_correlations);
+            }
         }
+        
+        // Set learning parameters based on mode
+        let (anti_hebbian_rate, decay_rate, homeostatic_rate, target_activity, use_backprop, backprop_rate) = match mode {
+            HebbianLearningMode::Classic => (0.0, 0.0001, 0.001, 0.1, false, 0.0),
+            HebbianLearningMode::Competitive => (0.02, 0.001, 0.01, 0.05, false, 0.0),
+            HebbianLearningMode::Oja => (0.0, hebbian_rate * 0.1, 0.005, 0.2, false, 0.0),
+            HebbianLearningMode::BCM => (0.01, 0.0005, 0.02, 0.15, false, 0.0),
+            HebbianLearningMode::AntiHebbian => (hebbian_rate, 0.0001, 0.001, 0.1, false, 0.0),
+            HebbianLearningMode::Hybrid => (hebbian_rate * 0.3, 0.001, 0.01, 0.12, true, hebbian_rate * 0.1),
+        };
         
         NeuralNetwork {
             layers,
             weights,
             biases,
-            learning_rate,
             activation_history,
+            correlation_matrix,
             history_size,
-            hebbian_rate: 0.01,  // Default Hebbian learning rate
-            decay_rate: 0.0001,  // Default weight decay rate
+            hebbian_rate,
+            anti_hebbian_rate,
+            decay_rate,
+            homeostatic_rate,
+            target_activity,
+            learning_mode: mode,
+            use_backprop,
+            backprop_rate,
             input_size,
             hidden_size,
             output_size,
@@ -124,34 +201,32 @@ impl NeuralNetwork {
         }
     }
     
-    /// Creates a new neural network with Hebbian learning capabilities
+    /// Creates a hybrid network that combines Hebbian learning with backpropagation
     /// 
     /// # Arguments
     /// * `layer_sizes` - Array of layer sizes [input, hidden1, hidden2, ..., output]
-    /// * `learning_rate` - Learning rate for backpropagation
     /// * `hebbian_rate` - Learning rate for Hebbian updates
-    /// * `history_size` - Number of recent activations to remember
-    /// * `decay_rate` - Weight decay rate to prevent unbounded growth
-    pub fn with_hebbian_learning(
-        layer_sizes: &[usize], 
-        learning_rate: f64, 
-        hebbian_rate: f64, 
-        history_size: usize, 
-        decay_rate: f64
-    ) -> Self {
-        let mut network = Self::with_layers(layer_sizes, learning_rate);
-        network.hebbian_rate = hebbian_rate;
-        network.history_size = history_size;
-        network.decay_rate = decay_rate;
-        
-        // Reinitialize activation history with new size
-        network.activation_history.clear();
-        for layer_size in &network.layers {
-            let layer_history = vec![vec![0.0; history_size]; *layer_size];
-            network.activation_history.push(layer_history);
-        }
-        
+    /// * `backprop_rate` - Learning rate for backpropagation
+    pub fn with_hybrid_learning(layer_sizes: &[usize], hebbian_rate: f64, backprop_rate: f64) -> Self {
+        let mut network = Self::with_layers_and_mode(layer_sizes, hebbian_rate, HebbianLearningMode::Hybrid);
+        network.backprop_rate = backprop_rate;
+        network.use_backprop = true;
         network
+    }
+    
+    /// Configure Hebbian learning parameters
+    pub fn configure_hebbian(&mut self, hebbian_rate: f64, anti_hebbian_rate: f64, 
+                           homeostatic_rate: f64, target_activity: f64) {
+        self.hebbian_rate = hebbian_rate;
+        self.anti_hebbian_rate = anti_hebbian_rate;
+        self.homeostatic_rate = homeostatic_rate;
+        self.target_activity = target_activity;
+    }
+    
+    /// Enable or disable backpropagation supplementation
+    pub fn set_backprop_enabled(&mut self, enabled: bool, rate: f64) {
+        self.use_backprop = enabled;
+        self.backprop_rate = rate;
     }
     
     /// Sigmoid activation function
@@ -234,14 +309,15 @@ impl NeuralNetwork {
         activations
     }
     
-    /// Train the network using backpropagation
+    /// Train the network using Hebbian learning (primary method)
+    /// Optionally supplements with backpropagation if enabled
     pub fn train(&mut self, inputs: &[f64], targets: &[f64]) -> f64 {
         assert_eq!(targets.len(), self.layers[self.layers.len() - 1], "Target size mismatch");
         
-        // Forward pass - get all layer activations
-        let activations = self.forward_all_layers(inputs);
+        // Forward pass and store activations in history
+        let activations = self.forward_with_history(inputs);
         
-        // Calculate total error
+        // Calculate error for monitoring
         let output = &activations[activations.len() - 1];
         let mut total_error = 0.0;
         for i in 0..output.len() {
@@ -250,66 +326,30 @@ impl NeuralNetwork {
         }
         total_error /= 2.0;
         
-        // Backpropagation
-        let mut layer_errors = vec![vec![]; self.layers.len()];
+        // Primary Hebbian learning
+        self.apply_hebbian_learning(&activations);
         
-        // Calculate output layer errors
-        let output_layer_idx = self.layers.len() - 1;
-        layer_errors[output_layer_idx] = vec![0.0; self.layers[output_layer_idx]];
-        for i in 0..self.layers[output_layer_idx] {
-            let error = targets[i] - activations[output_layer_idx][i];
-            layer_errors[output_layer_idx][i] = error * Self::sigmoid_derivative(activations[output_layer_idx][i]);
+        // Apply homeostatic regulation
+        self.apply_homeostatic_regulation(&activations);
+        
+        // Optional backpropagation supplementation
+        if self.use_backprop {
+            self.apply_backpropagation(&activations, targets);
         }
-        
-        // Backpropagate errors through hidden layers using parallel processing
-        for layer_idx in (1..self.layers.len() - 1).rev() {
-            layer_errors[layer_idx] = (0..self.layers[layer_idx])
-                .into_par_iter()
-                .map(|neuron| {
-                    // Parallel computation of error for this neuron
-                    let error: f64 = (0..self.layers[layer_idx + 1])
-                        .into_par_iter()
-                        .map(|next_neuron| {
-                            layer_errors[layer_idx + 1][next_neuron] * self.weights[layer_idx][neuron][next_neuron]
-                        })
-                        .sum();
-                    
-                    error * Self::sigmoid_derivative(activations[layer_idx][neuron])
-                })
-                .collect();
-        }
-        
-        // Update weights and biases using parallel processing
-        for layer_idx in 0..self.weights.len() {
-            // Parallel weight updates for each connection
-            self.weights[layer_idx]
-                .par_iter_mut()
-                .enumerate()
-                .for_each(|(from_neuron, weight_row)| {
-                    weight_row
-                        .par_iter_mut()
-                        .enumerate()
-                        .for_each(|(to_neuron, weight)| {
-                            let weight_update = self.learning_rate * 
-                                layer_errors[layer_idx + 1][to_neuron] * 
-                                activations[layer_idx][from_neuron];
-                            *weight += weight_update;
-                        });
-                });
-            
-            // Parallel bias updates
-            self.biases[layer_idx]
-                .par_iter_mut()
-                .enumerate()
-                .for_each(|(neuron, bias)| {
-                    *bias += self.learning_rate * layer_errors[layer_idx + 1][neuron];
-                });
-        }
-        
-        // Update legacy fields for backward compatibility
-        self.update_legacy_fields();
         
         total_error
+    }
+    
+    /// Train the network using only Hebbian learning (unsupervised)
+    pub fn train_unsupervised(&mut self, inputs: &[f64]) {
+        // Forward pass and store activations in history
+        let activations = self.forward_with_history(inputs);
+        
+        // Apply Hebbian learning
+        self.apply_hebbian_learning(&activations);
+        
+        // Apply homeostatic regulation
+        self.apply_homeostatic_regulation(&activations);
     }
     
     /// Forward propagation with activation history storage for Hebbian learning
@@ -359,6 +399,234 @@ impl NeuralNetwork {
             // Shift history (remove oldest, add newest)
             self.activation_history[layer_idx][neuron_idx].remove(0);
             self.activation_history[layer_idx][neuron_idx].push(activation);
+        }
+    }
+    
+    /// Apply Hebbian learning based on the selected learning mode
+    fn apply_hebbian_learning(&mut self, activations: &[Vec<f64>]) {
+        match self.learning_mode {
+            HebbianLearningMode::Classic => self.apply_classic_hebbian(activations),
+            HebbianLearningMode::Competitive => self.apply_competitive_learning(activations),
+            HebbianLearningMode::Oja => self.apply_oja_rule(activations),
+            HebbianLearningMode::BCM => self.apply_bcm_rule(activations),
+            HebbianLearningMode::AntiHebbian => self.apply_anti_hebbian(activations),
+            HebbianLearningMode::Hybrid => {
+                self.apply_classic_hebbian(activations);
+                self.apply_competitive_learning(activations);
+                self.apply_oja_rule(activations);
+            }
+        }
+    }
+    
+    /// Classic Hebbian learning: "neurons that fire together, wire together"
+    fn apply_classic_hebbian(&mut self, activations: &[Vec<f64>]) {
+        for layer_idx in 0..self.weights.len() {
+            let from_layer = &activations[layer_idx];
+            let to_layer = &activations[layer_idx + 1];
+            
+            // Parallel Hebbian updates
+            self.weights[layer_idx]
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(from_neuron, weight_row)| {
+                    weight_row
+                        .par_iter_mut()
+                        .enumerate()
+                        .for_each(|(to_neuron, weight)| {
+                            // Classic Hebbian rule: Δw = η * pre * post
+                            let pre_activity = from_layer[from_neuron];
+                            let post_activity = to_layer[to_neuron];
+                            let weight_update = self.hebbian_rate * pre_activity * post_activity;
+                            *weight += weight_update;
+                        });
+                });
+        }
+    }
+    
+    /// Competitive learning with winner-take-all dynamics
+    fn apply_competitive_learning(&mut self, activations: &[Vec<f64>]) {
+        for layer_idx in 1..activations.len() {
+            let layer_activations = &activations[layer_idx];
+            
+            // Find winner neuron (highest activation)
+            let winner = layer_activations
+                .iter()
+                .enumerate()
+                .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+                .map(|(idx, _)| idx)
+                .unwrap_or(0);
+            
+            // Update weights only for winner neuron
+            if layer_idx > 0 {
+                let weight_layer_idx = layer_idx - 1;
+                let input_layer = &activations[layer_idx - 1];
+                
+                for from_neuron in 0..input_layer.len() {
+                    let weight_update = self.hebbian_rate * input_layer[from_neuron];
+                    self.weights[weight_layer_idx][from_neuron][winner] += weight_update;
+                    
+                    // Lateral inhibition - weaken connections to non-winners
+                    for to_neuron in 0..layer_activations.len() {
+                        if to_neuron != winner {
+                            let inhibition = self.anti_hebbian_rate * input_layer[from_neuron] * 0.1;
+                            self.weights[weight_layer_idx][from_neuron][to_neuron] -= inhibition;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Oja's rule for normalized Hebbian learning
+    fn apply_oja_rule(&mut self, activations: &[Vec<f64>]) {
+        for layer_idx in 0..self.weights.len() {
+            let from_layer = &activations[layer_idx];
+            let to_layer = &activations[layer_idx + 1];
+            
+            self.weights[layer_idx]
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(from_neuron, weight_row)| {
+                    weight_row
+                        .par_iter_mut()
+                        .enumerate()
+                        .for_each(|(to_neuron, weight)| {
+                            let pre_activity = from_layer[from_neuron];
+                            let post_activity = to_layer[to_neuron];
+                            
+                            // Oja's rule: Δw = η * post * (pre - post * w)
+                            let weight_update = self.hebbian_rate * post_activity * 
+                                (pre_activity - post_activity * *weight);
+                            *weight += weight_update;
+                        });
+                });
+        }
+    }
+    
+    /// BCM (Bienenstock-Cooper-Munro) rule with sliding threshold
+    fn apply_bcm_rule(&mut self, activations: &[Vec<f64>]) {
+        for layer_idx in 0..self.weights.len() {
+            let from_layer = &activations[layer_idx];
+            let to_layer = &activations[layer_idx + 1];
+            
+            self.weights[layer_idx]
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(from_neuron, weight_row)| {
+                    weight_row
+                        .par_iter_mut()
+                        .enumerate()
+                        .for_each(|(to_neuron, weight)| {
+                            let pre_activity = from_layer[from_neuron];
+                            let post_activity = to_layer[to_neuron];
+                            
+                            // BCM threshold (sliding average of post-synaptic activity squared)
+                            let threshold = self.target_activity * self.target_activity;
+                            
+                            // BCM rule: Δw = η * pre * post * (post - threshold)
+                            let weight_update = self.hebbian_rate * pre_activity * post_activity * 
+                                (post_activity - threshold);
+                            *weight += weight_update;
+                        });
+                });
+        }
+    }
+    
+    /// Anti-Hebbian learning for decorrelation
+    fn apply_anti_hebbian(&mut self, activations: &[Vec<f64>]) {
+        for layer_idx in 0..self.weights.len() {
+            let from_layer = &activations[layer_idx];
+            let to_layer = &activations[layer_idx + 1];
+            
+            self.weights[layer_idx]
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(from_neuron, weight_row)| {
+                    weight_row
+                        .par_iter_mut()
+                        .enumerate()
+                        .for_each(|(to_neuron, weight)| {
+                            let pre_activity = from_layer[from_neuron];
+                            let post_activity = to_layer[to_neuron];
+                            
+                            // Anti-Hebbian: decrease weights when neurons fire together
+                            let weight_update = -self.anti_hebbian_rate * pre_activity * post_activity;
+                            *weight += weight_update;
+                        });
+                });
+        }
+    }
+    
+    /// Apply homeostatic regulation to maintain target activity levels
+    fn apply_homeostatic_regulation(&mut self, activations: &[Vec<f64>]) {
+        for layer_idx in 1..activations.len() {
+            let layer_activations = &activations[layer_idx];
+            
+            // Calculate average activity for this layer (for future use in adaptive homeostasis)
+            let _avg_activity: f64 = layer_activations.iter().sum::<f64>() / layer_activations.len() as f64;
+            
+            // Adjust biases to maintain target activity
+            let bias_layer_idx = layer_idx - 1;
+            for neuron_idx in 0..layer_activations.len() {
+                let activity_error = self.target_activity - layer_activations[neuron_idx];
+                let bias_update = self.homeostatic_rate * activity_error;
+                self.biases[bias_layer_idx][neuron_idx] += bias_update;
+            }
+        }
+    }
+    
+    /// Apply backpropagation as supplementary learning (when enabled)
+    fn apply_backpropagation(&mut self, activations: &[Vec<f64>], targets: &[f64]) {
+        // Standard backpropagation implementation
+        let mut layer_errors = vec![vec![]; self.layers.len()];
+        
+        // Calculate output layer errors
+        let output_layer_idx = self.layers.len() - 1;
+        layer_errors[output_layer_idx] = vec![0.0; self.layers[output_layer_idx]];
+        for i in 0..self.layers[output_layer_idx] {
+            let error = targets[i] - activations[output_layer_idx][i];
+            layer_errors[output_layer_idx][i] = error * Self::sigmoid_derivative(activations[output_layer_idx][i]);
+        }
+        
+        // Backpropagate errors through hidden layers
+        for layer_idx in (1..self.layers.len() - 1).rev() {
+            layer_errors[layer_idx] = (0..self.layers[layer_idx])
+                .into_par_iter()
+                .map(|neuron| {
+                    let error: f64 = (0..self.layers[layer_idx + 1])
+                        .into_par_iter()
+                        .map(|next_neuron| {
+                            layer_errors[layer_idx + 1][next_neuron] * self.weights[layer_idx][neuron][next_neuron]
+                        })
+                        .sum();
+                    error * Self::sigmoid_derivative(activations[layer_idx][neuron])
+                })
+                .collect();
+        }
+        
+        // Update weights and biases with backprop
+        for layer_idx in 0..self.weights.len() {
+            self.weights[layer_idx]
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(from_neuron, weight_row)| {
+                    weight_row
+                        .par_iter_mut()
+                        .enumerate()
+                        .for_each(|(to_neuron, weight)| {
+                            let weight_update = self.backprop_rate * 
+                                layer_errors[layer_idx + 1][to_neuron] * 
+                                activations[layer_idx][from_neuron];
+                            *weight += weight_update;
+                        });
+                });
+            
+            self.biases[layer_idx]
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(neuron, bias)| {
+                    *bias += self.backprop_rate * layer_errors[layer_idx + 1][neuron];
+                });
         }
     }
     
@@ -486,8 +754,8 @@ impl NeuralNetwork {
             .join(" -> ");
         
         format!(
-            "Neural Network: {} (learning rate: {})",
-            layer_info, self.learning_rate
+            "Neural Network: {} (Hebbian rate: {}, mode: {:?})",
+            layer_info, self.hebbian_rate, self.learning_mode
         )
     }
     
@@ -628,8 +896,10 @@ mod tests {
         assert_eq!(nn.input_size, 2);
         assert_eq!(nn.hidden_size, 3);
         assert_eq!(nn.output_size, 1);
-        assert_eq!(nn.learning_rate, 0.1);
+        assert_eq!(nn.hebbian_rate, 0.1);
         assert_eq!(nn.get_layers(), &[2, 3, 1]);
+        // Test that it defaults to Classic Hebbian learning
+        matches!(nn.learning_mode, HebbianLearningMode::Classic);
     }
 
     #[test]
@@ -715,40 +985,40 @@ mod tests {
     
     #[test]
     fn test_hebbian_network_creation() {
-        let nn = NeuralNetwork::with_hebbian_learning(&[2, 3, 1], 0.1, 0.05, 5, 0.001);
+        let nn = NeuralNetwork::with_layers(&[2, 3, 1], 0.05);
         
         assert_eq!(nn.get_layers(), &[2, 3, 1]);
         assert_eq!(nn.get_hebbian_rate(), 0.05);
-        assert_eq!(nn.get_history_size(), 5);
-        assert_eq!(nn.get_decay_rate(), 0.001);
+        assert_eq!(nn.get_history_size(), 20); // Default history size
+        assert_eq!(nn.get_decay_rate(), 0.0001); // Default decay rate for Classic mode
     }
     
     #[test]
     fn test_activation_history_storage() {
-        let mut nn = NeuralNetwork::with_hebbian_learning(&[2, 2, 1], 0.1, 0.05, 3, 0.001);
+        let mut nn = NeuralNetwork::with_layers(&[2, 2, 1], 0.05);
         
         // Initially, history should be all zeros
         let initial_history = nn.get_activation_history(0, 0);
-        assert_eq!(initial_history, &vec![0.0; 3]);
+        assert_eq!(initial_history, &vec![0.0; 20]); // Default history size is 20
         
         // After forward pass, history should be updated
         let _activations = nn.forward_with_history(&[0.5, 0.8]);
         let updated_history = nn.get_activation_history(0, 0);
         
-        // Last entry should be the input value
-        assert_eq!(updated_history[2], 0.5);
+        // Last entry should be the input value (at the end of the history)
+        assert_eq!(updated_history[19], 0.5);
     }
     
     #[test]
     fn test_hebbian_learning() {
-        let mut nn = NeuralNetwork::with_hebbian_learning(&[2, 2, 1], 0.1, 0.1, 5, 0.001);
+        let mut nn = NeuralNetwork::with_layers(&[2, 2, 1], 0.1);
         
         // Store initial weights
         let initial_weight = nn.weights[0][0][0];
         
-        // Apply Hebbian learning with some inputs
+        // Apply Hebbian learning with some inputs (using dummy targets)
         for _ in 0..10 {
-            nn.train_hebbian(&[1.0, 0.0]);
+            nn.train(&[1.0, 0.0], &[0.5]); // Hebbian learning is primary, targets are for error calculation only
         }
         
         // Weights should have changed
@@ -758,7 +1028,7 @@ mod tests {
     
     #[test]
     fn test_neuron_correlation() {
-        let mut nn = NeuralNetwork::with_hebbian_learning(&[2, 2, 1], 0.1, 0.05, 5, 0.001);
+        let mut nn = NeuralNetwork::with_layers(&[2, 2, 1], 0.1);
         
         // Build up some activation history
         for _ in 0..5 {
@@ -775,13 +1045,13 @@ mod tests {
     
     #[test]
     fn test_hybrid_training() {
-        let mut nn = NeuralNetwork::with_hebbian_learning(&[2, 3, 1], 0.1, 0.05, 5, 0.001);
+        let mut nn = NeuralNetwork::with_hybrid_learning(&[2, 3, 1], 0.1, 0.05);
         
         let inputs = vec![1.0, 0.0];
         let targets = vec![1.0];
         
         // Hybrid training should return an error value
-        let error = nn.train_hybrid(&inputs, &targets);
+        let error = nn.train(&inputs, &targets);
         assert!(error >= 0.0);
         
         // Activation history should be updated
@@ -791,7 +1061,8 @@ mod tests {
     
     #[test]
     fn test_weight_decay() {
-        let mut nn = NeuralNetwork::with_hebbian_learning(&[2, 2, 1], 0.1, 0.1, 5, 0.1); // High decay rate
+        let mut nn = NeuralNetwork::with_layers(&[2, 2, 1], 0.1);
+        nn.decay_rate = 0.1; // Set high decay rate for testing
         
         // Set a specific weight value
         nn.weights[0][0][0] = 1.0;

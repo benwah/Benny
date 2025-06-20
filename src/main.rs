@@ -1,4 +1,4 @@
-use neural_network::NeuralNetwork;
+use neural_network::{NeuralNetwork, HebbianLearningMode};
 
 fn main() {
     println!("🧠 Simple Neural Network in Rust");
@@ -114,28 +114,59 @@ fn demonstrate_hebbian_learning() {
     println!("\n🧠 Hebbian Learning Preview");
     println!("---------------------------");
     println!("\"Neurons that fire together, wire together\"");
+    println!();
     
-    let mut hebbian_nn = NeuralNetwork::with_hebbian_learning(&[2, 3, 1], 0.1, 0.05, 5, 0.001);
-    println!("{}", hebbian_nn.info());
-    println!("Hebbian rate: {}, History size: {}", hebbian_nn.get_hebbian_rate(), hebbian_nn.get_history_size());
+    // Show different Hebbian learning modes
+    println!("🎯 Available Hebbian Learning Modes:");
+    println!("  • Classic: Basic Hebbian rule (default)");
+    println!("  • Competitive: Winner-take-all learning");
+    println!("  • Oja: Normalized Hebbian learning");
+    println!("  • BCM: Bienenstock-Cooper-Munro rule");
+    println!("  • AntiHebbian: Negative correlation learning");
+    println!("  • Hybrid: Combines Hebbian + Backpropagation");
+    println!();
+    
+    // Demonstrate Classic Hebbian learning (default)
+    let mut hebbian_nn = NeuralNetwork::with_layers(&[2, 3, 1], 0.05);
+    println!("🔬 Classic Hebbian Network: {}", hebbian_nn.info());
+    println!("   Hebbian rate: {}", hebbian_nn.get_hebbian_rate());
+    println!("   Learning mode: Classic (default)");
     
     // Show weight before Hebbian learning
     let initial_weight = hebbian_nn.get_weight(0, 0, 0);
-    println!("Initial weight (input[0] -> hidden[0]): {:.4}", initial_weight);
+    println!("   Initial weight (input[0] -> hidden[0]): {:.4}", initial_weight);
     
     // Apply Hebbian learning with correlated inputs
-    println!("Training with correlated inputs [1.0, 1.0]...");
+    println!("\n⚡ Training with correlated inputs [1.0, 1.0]...");
     for _ in 0..20 {
-        hebbian_nn.train_hebbian(&[1.0, 1.0]); // Both inputs high
+        hebbian_nn.train_unsupervised(&[1.0, 1.0]); // Both inputs high - pure Hebbian learning
     }
     
     let final_weight = hebbian_nn.get_weight(0, 0, 0);
     let correlation = hebbian_nn.get_neuron_correlation(0, 0, 0, 1);
     
-    println!("After Hebbian training:");
-    println!("  Final weight: {:.4}", final_weight);
-    println!("  Input correlation: {:.4}", correlation);
-    println!("  Weight change: {:.4}", final_weight - initial_weight);
+    println!("📊 After Hebbian training:");
+    println!("   Final weight: {:.4}", final_weight);
+    println!("   Input correlation: {:.4}", correlation);
+    println!("   Weight change: {:.4}", final_weight - initial_weight);
+    
+    // Demonstrate different learning mode
+    println!("\n🔄 Anti-Hebbian Learning Mode:");
+    let mut anti_nn = NeuralNetwork::with_layers_and_mode(
+        &[2, 3, 1], 
+        0.05, 
+        HebbianLearningMode::AntiHebbian
+    );
+    println!("   Network: {}", anti_nn.info());
+    
+    // Train with anti-correlated patterns
+    for _ in 0..10 {
+        anti_nn.train_unsupervised(&[1.0, 0.0]); // High-Low
+        anti_nn.train_unsupervised(&[0.0, 1.0]); // Low-High
+    }
+    
+    let anti_correlation = anti_nn.get_neuron_correlation(0, 0, 0, 1);
+    println!("   Anti-correlation learned: {:.4}", anti_correlation);
     
     println!("\n💡 Run 'cargo run --example hebbian_learning' for full demonstration!");
     

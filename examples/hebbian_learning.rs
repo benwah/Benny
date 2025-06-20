@@ -1,4 +1,4 @@
-use neural_network::NeuralNetwork;
+use neural_network::{NeuralNetwork, HebbianLearningMode};
 
 fn main() {
     println!("🧠 Hebbian Learning Demonstration");
@@ -6,13 +6,11 @@ fn main() {
     println!("\"Neurons that fire together, wire together\"");
     println!();
 
-    // Create a network with Hebbian learning capabilities
-    let mut hebbian_nn = NeuralNetwork::with_hebbian_learning(
-        &[2, 4, 1],  // 2 inputs, 4 hidden, 1 output
-        0.1,         // Backpropagation learning rate
-        0.05,        // Hebbian learning rate
-        10,          // History size (remember last 10 activations)
-        0.001        // Weight decay rate
+    // Create a network with Classic Hebbian learning
+    let mut hebbian_nn = NeuralNetwork::with_layers_and_mode(
+        &[2, 4, 1],                    // 2 inputs, 4 hidden, 1 output
+        0.05,                          // Hebbian learning rate
+        HebbianLearningMode::Classic   // Classic Hebbian learning
     );
 
     println!("🏗️  Network Architecture:");
@@ -45,7 +43,7 @@ fn main() {
 
     for epoch in 0..100 {
         for pattern in &correlated_patterns {
-            hebbian_nn.train_hebbian(pattern);
+            hebbian_nn.train_unsupervised(pattern);
         }
         
         if epoch % 20 == 0 {
@@ -73,7 +71,11 @@ fn main() {
     println!("---------------------------");
     
     // Reset the network
-    let mut anti_nn = NeuralNetwork::with_hebbian_learning(&[2, 4, 1], 0.1, 0.05, 10, 0.001);
+    let mut anti_nn = NeuralNetwork::with_layers_and_mode(
+        &[2, 4, 1], 
+        0.05, 
+        HebbianLearningMode::AntiHebbian
+    );
     
     println!("Training with anti-correlated patterns...");
     let anti_correlated_patterns = [
@@ -87,7 +89,7 @@ fn main() {
 
     for epoch in 0..100 {
         for pattern in &anti_correlated_patterns {
-            anti_nn.train_hebbian(pattern);
+            anti_nn.train_unsupervised(pattern);
         }
         
         if epoch % 20 == 0 {
@@ -104,7 +106,7 @@ fn main() {
     println!("🔀 Hybrid Learning (Backpropagation + Hebbian)");
     println!("----------------------------------------------");
     
-    let mut hybrid_nn = NeuralNetwork::with_hebbian_learning(&[2, 4, 1], 0.3, 0.02, 10, 0.001);
+    let mut hybrid_nn = NeuralNetwork::with_hybrid_learning(&[2, 4, 1], 0.02, 0.3);
     
     // XOR problem with Hebbian enhancement
     let xor_data = [
@@ -119,7 +121,7 @@ fn main() {
         let mut total_error = 0.0;
         
         for (inputs, targets) in &xor_data {
-            let error = hybrid_nn.train_hybrid(inputs, targets);
+            let error = hybrid_nn.train(inputs, targets);
             total_error += error;
         }
         
