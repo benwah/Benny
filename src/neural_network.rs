@@ -764,6 +764,11 @@ impl NeuralNetwork {
         &self.layers
     }
     
+    /// Get the current Hebbian learning mode
+    pub fn get_learning_mode(&self) -> &HebbianLearningMode {
+        &self.learning_mode
+    }
+    
     /// Get the number of layers (including input and output)
     pub fn num_layers(&self) -> usize {
         self.layers.len()
