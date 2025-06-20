@@ -4,6 +4,11 @@ fn main() {
     println!("🧠 Simple Neural Network in Rust");
     println!("================================");
     
+    // Demonstrate flexible architecture
+    demonstrate_flexible_architecture();
+    
+    println!("\n{}", "=".repeat(50));
+    
     // Demonstrate XOR problem
     solve_xor_problem();
     
@@ -16,6 +21,25 @@ fn main() {
     
     // Demonstrate OR problem
     solve_or_problem();
+}
+
+fn demonstrate_flexible_architecture() {
+    println!("\n🏗️  Flexible Architecture Demo");
+    println!("-----------------------------");
+    
+    // Show different network configurations
+    let configs = vec![
+        ("Simple", vec![2, 3, 1]),
+        ("Deep", vec![2, 6, 4, 2, 1]),
+        ("Wide", vec![2, 10, 1]),
+        ("Multi-output", vec![3, 5, 3]),
+    ];
+    
+    for (name, layers) in configs {
+        let nn = NeuralNetwork::with_layers(&layers, 0.1);
+        println!("  {}: {} ({} parameters)", name, nn.info(), nn.num_parameters());
+    }
+    println!();
 }
 
 fn solve_xor_problem() {

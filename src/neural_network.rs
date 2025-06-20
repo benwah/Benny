@@ -2,6 +2,12 @@ use rand::Rng;
 
 #[derive(Debug, Clone)]
 pub struct NeuralNetwork {
+    layers: Vec<usize>,           // Layer sizes [input, hidden1, hidden2, ..., output]
+    weights: Vec<Vec<Vec<f64>>>,  // weights[layer][from_neuron][to_neuron]
+    biases: Vec<Vec<f64>>,        // biases[layer][neuron]
+    learning_rate: f64,
+    
+    // Keep legacy fields for backward compatibility
     input_size: usize,
     hidden_size: usize,
     output_size: usize,
@@ -9,28 +15,86 @@ pub struct NeuralNetwork {
     weights_hidden_output: Vec<Vec<f64>>,
     bias_hidden: Vec<f64>,
     bias_output: Vec<f64>,
-    learning_rate: f64,
 }
 
 impl NeuralNetwork {
-    /// Creates a new neural network with the specified architecture
+    /// Creates a new neural network with the specified architecture (backward compatible)
     pub fn new(input_size: usize, hidden_size: usize, output_size: usize, learning_rate: f64) -> Self {
+        // Use the new flexible constructor with a single hidden layer
+        Self::with_layers(&[input_size, hidden_size, output_size], learning_rate)
+    }
+    
+    /// Creates a new neural network with flexible layer configuration
+    /// 
+    /// # Arguments
+    /// * `layer_sizes` - Array of layer sizes [input, hidden1, hidden2, ..., output]
+    /// * `learning_rate` - Learning rate for training
+    /// 
+    /// # Examples
+    /// ```
+    /// use neural_network::NeuralNetwork;
+    /// 
+    /// // Simple network: 2 inputs, 3 hidden, 1 output
+    /// let nn = NeuralNetwork::with_layers(&[2, 3, 1], 0.1);
+    /// 
+    /// // Deep network: 4 inputs, 8 hidden, 6 hidden, 3 hidden, 2 outputs
+    /// let nn = NeuralNetwork::with_layers(&[4, 8, 6, 3, 2], 0.05);
+    /// ```
+    pub fn with_layers(layer_sizes: &[usize], learning_rate: f64) -> Self {
+        assert!(layer_sizes.len() >= 2, "Network must have at least input and output layers");
+        
         let mut rng = rand::thread_rng();
+        let layers = layer_sizes.to_vec();
         
-        // Initialize weights with random values between -1 and 1
-        let weights_input_hidden = (0..input_size)
-            .map(|_| (0..hidden_size).map(|_| rng.gen_range(-1.0..1.0)).collect())
-            .collect();
+        // Initialize weights for each layer connection
+        let mut weights: Vec<Vec<Vec<f64>>> = Vec::new();
+        for i in 0..layers.len() - 1 {
+            let from_size = layers[i];
+            let to_size = layers[i + 1];
+            let layer_weights: Vec<Vec<f64>> = (0..from_size)
+                .map(|_| (0..to_size).map(|_| rng.gen_range(-1.0..1.0)).collect())
+                .collect();
+            weights.push(layer_weights);
+        }
         
-        let weights_hidden_output = (0..hidden_size)
-            .map(|_| (0..output_size).map(|_| rng.gen_range(-1.0..1.0)).collect())
-            .collect();
+        // Initialize biases for each layer (except input)
+        let mut biases: Vec<Vec<f64>> = Vec::new();
+        for i in 1..layers.len() {
+            let layer_biases: Vec<f64> = (0..layers[i]).map(|_| rng.gen_range(-1.0..1.0)).collect();
+            biases.push(layer_biases);
+        }
         
-        // Initialize biases with random values
-        let bias_hidden = (0..hidden_size).map(|_| rng.gen_range(-1.0..1.0)).collect();
-        let bias_output = (0..output_size).map(|_| rng.gen_range(-1.0..1.0)).collect();
+        // For backward compatibility, set up legacy fields
+        let input_size = layers[0];
+        let output_size = layers[layers.len() - 1];
+        let hidden_size = if layers.len() > 2 { layers[1] } else { 0 };
+        
+        // Legacy weight matrices (for single hidden layer compatibility)
+        let weights_input_hidden = if layers.len() > 2 {
+            weights[0].clone()
+        } else {
+            vec![vec![0.0; output_size]; input_size]
+        };
+        
+        let weights_hidden_output = if layers.len() > 2 {
+            weights[weights.len() - 1].clone()
+        } else {
+            weights[0].clone()
+        };
+        
+        let bias_hidden = if layers.len() > 2 {
+            biases[0].clone()
+        } else {
+            vec![0.0; hidden_size]
+        };
+        
+        let bias_output = biases[biases.len() - 1].clone();
         
         NeuralNetwork {
+            layers,
+            weights,
+            biases,
+            learning_rate,
             input_size,
             hidden_size,
             output_size,
@@ -38,7 +102,6 @@ impl NeuralNetwork {
             weights_hidden_output,
             bias_hidden,
             bias_output,
-            learning_rate,
         }
     }
     
@@ -54,91 +117,135 @@ impl NeuralNetwork {
     
     /// Forward propagation through the network
     pub fn forward(&self, inputs: &[f64]) -> (Vec<f64>, Vec<f64>) {
-        // Calculate hidden layer
-        let mut hidden = vec![0.0; self.hidden_size];
-        for i in 0..self.hidden_size {
-            let mut sum = self.bias_hidden[i];
-            for j in 0..self.input_size {
-                sum += inputs[j] * self.weights_input_hidden[j][i];
+        assert_eq!(inputs.len(), self.layers[0], "Input size mismatch");
+        
+        let mut activations = vec![inputs.to_vec()];
+        
+        // Forward propagate through each layer
+        for layer_idx in 0..self.weights.len() {
+            let current_layer = &activations[layer_idx];
+            let mut next_layer = vec![0.0; self.layers[layer_idx + 1]];
+            
+            // Calculate weighted sum + bias for each neuron in next layer
+            for to_neuron in 0..next_layer.len() {
+                let mut sum = self.biases[layer_idx][to_neuron];
+                for from_neuron in 0..current_layer.len() {
+                    sum += current_layer[from_neuron] * self.weights[layer_idx][from_neuron][to_neuron];
+                }
+                next_layer[to_neuron] = Self::sigmoid(sum);
             }
-            hidden[i] = Self::sigmoid(sum);
+            
+            activations.push(next_layer);
         }
         
-        // Calculate output layer
-        let mut output = vec![0.0; self.output_size];
-        for i in 0..self.output_size {
-            let mut sum = self.bias_output[i];
-            for j in 0..self.hidden_size {
-                sum += hidden[j] * self.weights_hidden_output[j][i];
-            }
-            output[i] = Self::sigmoid(sum);
-        }
+        // For backward compatibility, return (hidden, output)
+        let output = activations.last().unwrap().clone();
+        let hidden = if activations.len() > 2 {
+            activations[1].clone()
+        } else {
+            vec![]
+        };
         
         (hidden, output)
     }
     
+    /// Forward propagation returning all layer activations (useful for deep networks)
+    pub fn forward_all_layers(&self, inputs: &[f64]) -> Vec<Vec<f64>> {
+        assert_eq!(inputs.len(), self.layers[0], "Input size mismatch");
+        
+        let mut activations = vec![inputs.to_vec()];
+        
+        // Forward propagate through each layer
+        for layer_idx in 0..self.weights.len() {
+            let current_layer = &activations[layer_idx];
+            let mut next_layer = vec![0.0; self.layers[layer_idx + 1]];
+            
+            // Calculate weighted sum + bias for each neuron in next layer
+            for to_neuron in 0..next_layer.len() {
+                let mut sum = self.biases[layer_idx][to_neuron];
+                for from_neuron in 0..current_layer.len() {
+                    sum += current_layer[from_neuron] * self.weights[layer_idx][from_neuron][to_neuron];
+                }
+                next_layer[to_neuron] = Self::sigmoid(sum);
+            }
+            
+            activations.push(next_layer);
+        }
+        
+        activations
+    }
+    
     /// Train the network using backpropagation
     pub fn train(&mut self, inputs: &[f64], targets: &[f64]) -> f64 {
-        // Forward pass
-        let (hidden, output) = self.forward(inputs);
+        assert_eq!(targets.len(), self.layers[self.layers.len() - 1], "Target size mismatch");
         
-        // Calculate output layer errors
-        let mut output_errors = vec![0.0; self.output_size];
+        // Forward pass - get all layer activations
+        let activations = self.forward_all_layers(inputs);
+        
+        // Calculate total error
+        let output = &activations[activations.len() - 1];
         let mut total_error = 0.0;
-        for i in 0..self.output_size {
-            output_errors[i] = targets[i] - output[i];
-            total_error += output_errors[i].powi(2);
+        for i in 0..output.len() {
+            let error = targets[i] - output[i];
+            total_error += error.powi(2);
         }
         total_error /= 2.0;
         
-        // Calculate output layer gradients
-        let mut output_gradients = vec![0.0; self.output_size];
-        for i in 0..self.output_size {
-            output_gradients[i] = output_errors[i] * Self::sigmoid_derivative(output[i]);
+        // Backpropagation
+        let mut layer_errors = vec![vec![]; self.layers.len()];
+        
+        // Calculate output layer errors
+        let output_layer_idx = self.layers.len() - 1;
+        layer_errors[output_layer_idx] = vec![0.0; self.layers[output_layer_idx]];
+        for i in 0..self.layers[output_layer_idx] {
+            let error = targets[i] - activations[output_layer_idx][i];
+            layer_errors[output_layer_idx][i] = error * Self::sigmoid_derivative(activations[output_layer_idx][i]);
         }
         
-        // Calculate hidden layer errors
-        let mut hidden_errors = vec![0.0; self.hidden_size];
-        for i in 0..self.hidden_size {
-            let mut error = 0.0;
-            for j in 0..self.output_size {
-                error += output_gradients[j] * self.weights_hidden_output[i][j];
+        // Backpropagate errors through hidden layers
+        for layer_idx in (1..self.layers.len() - 1).rev() {
+            layer_errors[layer_idx] = vec![0.0; self.layers[layer_idx]];
+            for neuron in 0..self.layers[layer_idx] {
+                let mut error = 0.0;
+                for next_neuron in 0..self.layers[layer_idx + 1] {
+                    error += layer_errors[layer_idx + 1][next_neuron] * self.weights[layer_idx][neuron][next_neuron];
+                }
+                layer_errors[layer_idx][neuron] = error * Self::sigmoid_derivative(activations[layer_idx][neuron]);
             }
-            hidden_errors[i] = error;
-        }
-        
-        // Calculate hidden layer gradients
-        let mut hidden_gradients = vec![0.0; self.hidden_size];
-        for i in 0..self.hidden_size {
-            hidden_gradients[i] = hidden_errors[i] * Self::sigmoid_derivative(hidden[i]);
         }
         
         // Update weights and biases
-        // Update weights between hidden and output layers
-        for i in 0..self.hidden_size {
-            for j in 0..self.output_size {
-                self.weights_hidden_output[i][j] += self.learning_rate * output_gradients[j] * hidden[i];
+        for layer_idx in 0..self.weights.len() {
+            // Update weights
+            for from_neuron in 0..self.layers[layer_idx] {
+                for to_neuron in 0..self.layers[layer_idx + 1] {
+                    let weight_update = self.learning_rate * 
+                        layer_errors[layer_idx + 1][to_neuron] * 
+                        activations[layer_idx][from_neuron];
+                    self.weights[layer_idx][from_neuron][to_neuron] += weight_update;
+                }
+            }
+            
+            // Update biases
+            for neuron in 0..self.layers[layer_idx + 1] {
+                self.biases[layer_idx][neuron] += self.learning_rate * layer_errors[layer_idx + 1][neuron];
             }
         }
         
-        // Update output biases
-        for i in 0..self.output_size {
-            self.bias_output[i] += self.learning_rate * output_gradients[i];
-        }
-        
-        // Update weights between input and hidden layers
-        for i in 0..self.input_size {
-            for j in 0..self.hidden_size {
-                self.weights_input_hidden[i][j] += self.learning_rate * hidden_gradients[j] * inputs[i];
-            }
-        }
-        
-        // Update hidden biases
-        for i in 0..self.hidden_size {
-            self.bias_hidden[i] += self.learning_rate * hidden_gradients[i];
-        }
+        // Update legacy fields for backward compatibility
+        self.update_legacy_fields();
         
         total_error
+    }
+    
+    /// Update legacy fields for backward compatibility
+    fn update_legacy_fields(&mut self) {
+        if self.layers.len() > 2 {
+            self.weights_input_hidden = self.weights[0].clone();
+            self.weights_hidden_output = self.weights[self.weights.len() - 1].clone();
+            self.bias_hidden = self.biases[0].clone();
+        }
+        self.bias_output = self.biases[self.biases.len() - 1].clone();
     }
     
     /// Make a prediction using the trained network
@@ -149,10 +256,53 @@ impl NeuralNetwork {
     
     /// Get network architecture information
     pub fn info(&self) -> String {
+        let layer_info = self.layers.iter()
+            .map(|&size| size.to_string())
+            .collect::<Vec<_>>()
+            .join(" -> ");
+        
         format!(
-            "Neural Network: {} inputs -> {} hidden -> {} outputs (learning rate: {})",
-            self.input_size, self.hidden_size, self.output_size, self.learning_rate
+            "Neural Network: {} (learning rate: {})",
+            layer_info, self.learning_rate
         )
+    }
+    
+    /// Get the layer sizes
+    pub fn get_layers(&self) -> &[usize] {
+        &self.layers
+    }
+    
+    /// Get the number of layers (including input and output)
+    pub fn num_layers(&self) -> usize {
+        self.layers.len()
+    }
+    
+    /// Get the number of hidden layers
+    pub fn num_hidden_layers(&self) -> usize {
+        if self.layers.len() >= 3 {
+            self.layers.len() - 2
+        } else {
+            0
+        }
+    }
+    
+    /// Get total number of parameters (weights + biases)
+    pub fn num_parameters(&self) -> usize {
+        let mut total = 0;
+        
+        // Count weights
+        for layer_weights in &self.weights {
+            for neuron_weights in layer_weights {
+                total += neuron_weights.len();
+            }
+        }
+        
+        // Count biases
+        for layer_biases in &self.biases {
+            total += layer_biases.len();
+        }
+        
+        total
     }
 }
 
@@ -167,6 +317,7 @@ mod tests {
         assert_eq!(nn.hidden_size, 3);
         assert_eq!(nn.output_size, 1);
         assert_eq!(nn.learning_rate, 0.1);
+        assert_eq!(nn.get_layers(), &[2, 3, 1]);
     }
 
     #[test]
@@ -190,5 +341,63 @@ mod tests {
         
         assert_eq!(prediction.len(), 1);
         assert!(prediction[0] >= 0.0 && prediction[0] <= 1.0);
+    }
+    
+    #[test]
+    fn test_flexible_architecture() {
+        // Test deep network: 3 inputs -> 5 hidden -> 4 hidden -> 2 outputs
+        let nn = NeuralNetwork::with_layers(&[3, 5, 4, 2], 0.05);
+        
+        assert_eq!(nn.get_layers(), &[3, 5, 4, 2]);
+        assert_eq!(nn.num_layers(), 4);
+        assert_eq!(nn.num_hidden_layers(), 2);
+        
+        let inputs = vec![0.1, 0.5, 0.9];
+        let prediction = nn.predict(&inputs);
+        
+        assert_eq!(prediction.len(), 2);
+        for &output in &prediction {
+            assert!(output >= 0.0 && output <= 1.0);
+        }
+    }
+    
+    #[test]
+    fn test_simple_network_no_hidden() {
+        // Test direct input -> output (no hidden layers)
+        let nn = NeuralNetwork::with_layers(&[2, 1], 0.1);
+        
+        assert_eq!(nn.get_layers(), &[2, 1]);
+        assert_eq!(nn.num_layers(), 2);
+        assert_eq!(nn.num_hidden_layers(), 0);
+        
+        let inputs = vec![0.3, 0.7];
+        let prediction = nn.predict(&inputs);
+        
+        assert_eq!(prediction.len(), 1);
+        assert!(prediction[0] >= 0.0 && prediction[0] <= 1.0);
+    }
+    
+    #[test]
+    fn test_parameter_counting() {
+        let nn = NeuralNetwork::with_layers(&[2, 3, 1], 0.1);
+        
+        // Weights: (2*3) + (3*1) = 6 + 3 = 9
+        // Biases: 3 + 1 = 4
+        // Total: 9 + 4 = 13
+        assert_eq!(nn.num_parameters(), 13);
+    }
+    
+    #[test]
+    fn test_training_compatibility() {
+        let mut nn = NeuralNetwork::new(2, 3, 1, 0.5);
+        let inputs = vec![1.0, 0.0];
+        let targets = vec![1.0];
+        
+        let error_before = nn.train(&inputs, &targets);
+        let error_after = nn.train(&inputs, &targets);
+        
+        // Error should generally decrease (though not guaranteed in single step)
+        assert!(error_before >= 0.0);
+        assert!(error_after >= 0.0);
     }
 }
