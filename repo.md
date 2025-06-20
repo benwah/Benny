@@ -23,13 +23,20 @@
 - **Protocols**: TCP, SSL/TLS with certificate authentication
 - **Use Cases**: IoT integration, API processing, enterprise systems
 
-### 4. Input Server (`src/input_server.rs` + `src/bin/input_server.rs`)
+### 4. Neural Network Server (`src/server.rs`)
+- **Purpose**: Distributed neural network daemon that binds inputs to the network and outputs to other Neural Network Server instances
+- **Architecture**: Uses DistributedNetwork infrastructure with NNP protocol
+- **Features**: Forward data processing, Hebbian learning, peer-to-peer communication
+- **Protocol**: Binary NNP protocol with 22-byte headers
+- **Use Cases**: Distributed neural network topologies, multi-node processing
+
+### 5. Input Server (`src/input_server.rs` + `src/bin/input_server.rs`)
 - **Purpose**: Web-based interface for manually activating neural network inputs
 - **Architecture**: HTTP server + WebSocket for real-time communication
 - **Features**: Browser-based input controls, real-time feedback
 - **Ports**: HTTP (default 8000), WebSocket (default 8001)
 
-### 5. Output Server (`src/output_server.rs` + `src/bin/output_server.rs`) ⭐ **RECENTLY ADDED**
+### 6. Output Server (`src/output_server.rs` + `src/bin/output_server.rs`) ⭐ **RECENTLY ADDED**
 - **Purpose**: Real-time visualization of neural network outputs via web dashboard
 - **Architecture**: TCP server (neural networks) + HTTP/WebSocket (web interface)
 - **Features**: Live charts, activity logging, multi-network monitoring
@@ -46,6 +53,7 @@ src/
 ├── neural_network.rs         # Core neural network implementation
 ├── distributed_network.rs    # Distributed computing with NNP protocol
 ├── secure_network.rs         # TLS/SSL security layer
+├── server.rs                 # Neural network server daemon
 ├── io_interface.rs           # External system I/O interfaces
 ├── input_server.rs           # Web-based input interface server
 ├── output_server.rs          # Web-based output visualization server ⭐ NEW
@@ -66,20 +74,29 @@ static/                       # Web interface assets
 # Training
 cargo run -- train -c config.toml -d data.json -o model.bin
 
-# Server mode
-cargo run -- server -m model.bin -p 8080
+# Neural Network Server mode (distributed daemon)
+cargo run -- server -c config.toml -p 8080
 
 # Interactive mode
 cargo run -- interactive -c config.toml
 ```
 
-### 2. Input Server (`cargo run --bin input_server`)
+### 2. Neural Network Server (via CLI server mode)
+```bash
+# Start distributed neural network server daemon
+cargo run -- server -c config.toml -p 8080 --daemon
+
+# Example: Start server with specific model
+cargo run -- server -c config.toml -m model.bin -p 8080
+```
+
+### 3. Input Server (`cargo run --bin input_server`)
 ```bash
 # Start input server for manual neural network input control
 cargo run --bin input_server --listen-port 8000 --web-port 8001
 ```
 
-### 3. Output Server (`cargo run --bin output_server`) ⭐ **NEW**
+### 4. Output Server (`cargo run --bin output_server`) ⭐ **NEW**
 ```bash
 # Start output server for real-time neural network output visualization
 cargo run --bin output_server --listen-port 8002 --web-port 12000 --websocket-port 12001
@@ -97,6 +114,9 @@ cargo test
 
 # Run specific example
 cargo run --example simple_example
+
+# Test neural network server
+cargo run --example neural_network_server
 
 # Test output server with sample data
 cargo run --example simple_output_test
@@ -150,6 +170,30 @@ manager.add_output_interface(output_id, Box::new(output_interface));
 
 // Start processing
 manager.start_processing().await?;
+```
+
+### Working with Neural Network Server
+```rust
+use neural_network::{DistributedNetwork, NeuralNetwork, ServerConfig};
+
+// Create neural network
+let network = NeuralNetwork::with_layers(&[4, 2, 1], 0.01);
+
+// Create server configuration
+let config = ServerConfig {
+    name: "NeuralNetworkServer".to_string(),
+    address: "127.0.0.1".to_string(),
+    port: 8080,
+    cert_path: None,
+    key_path: None,
+    output_endpoints: vec!["127.0.0.1:8081".to_string()],
+    hebbian_learning: true,
+    daemon_mode: false,
+};
+
+// Create and start server
+let server = NetworkServer::new(network, config)?;
+server.start().await?;
 ```
 
 ### Working with Output Server ⭐ **NEW**
@@ -316,11 +360,21 @@ cargo run -- --verbose train -c config.toml
 - **Real-time Visualization**: Web interfaces for monitoring and control
 - **I/O Integration**: Connect to external systems via TCP/SSL
 
-### Working with the Output Server
-- **Purpose**: Real-time visualization of neural network outputs
-- **Protocol**: Simple JSON arrays sent via TCP
-- **Web Interface**: Modern dashboard with live charts and logging
-- **Testing**: Use `examples/simple_output_test.rs` for testing
-- **Integration**: Easy to integrate with existing neural networks
+### Working with the Three Server Systems
+- **Neural Network Server**: Distributed daemon for peer-to-peer neural network communication
+  - **Protocol**: Binary NNP protocol with forward/backward data propagation
+  - **Use Case**: Building distributed neural network topologies
+  - **Testing**: Use `examples/neural_network_server.rs` for testing
+  
+- **Input Server**: Web-based manual input control
+  - **Protocol**: HTTP/WebSocket for browser communication
+  - **Use Case**: Manual testing and interactive neural network control
+  - **Testing**: Use `cargo run --bin input_server` and visit web interface
+  
+- **Output Server**: Real-time visualization of neural network outputs
+  - **Protocol**: Simple JSON arrays sent via TCP
+  - **Web Interface**: Modern dashboard with live charts and logging
+  - **Testing**: Use `examples/simple_output_test.rs` for testing
+  - **Integration**: Easy to integrate with existing neural networks
 
 This repository represents a complete neural network ecosystem with advanced features for research, development, and production deployment. The recent addition of the Output Server provides powerful real-time visualization capabilities for monitoring neural network behavior.
