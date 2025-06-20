@@ -1094,7 +1094,7 @@ impl NeuralNetwork {
     /// * `Result<NeuralNetwork, Box<dyn std::error::Error>>` - The loaded network on success, error on failure
     /// 
     /// # Example
-    /// ```
+    /// ```no_run
     /// use neural_network::NeuralNetwork;
     /// 
     /// let nn = NeuralNetwork::load_from_file("my_network.json")
@@ -1136,7 +1136,7 @@ impl NeuralNetwork {
     /// * `Result<NeuralNetwork, Box<dyn std::error::Error>>` - The loaded network on success, error on failure
     /// 
     /// # Example
-    /// ```
+    /// ```no_run
     /// use neural_network::NeuralNetwork;
     /// 
     /// let nn = NeuralNetwork::load_from_binary("my_network.bin")
