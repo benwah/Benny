@@ -295,7 +295,7 @@ impl NeuralNetwork {
             activations.push(next_layer);
         }
 
-        // For backward compatibility, return (hidden, output)
+        // Return (output, hidden) - output is the final layer activations
         let output = activations.last().unwrap().clone();
         let hidden = if activations.len() > 2 {
             activations[1].clone()
@@ -303,7 +303,7 @@ impl NeuralNetwork {
             vec![]
         };
 
-        (hidden, output)
+        (output, hidden)
     }
 
     /// Forward propagation with continuous Hebbian learning (online learning)
@@ -343,7 +343,7 @@ impl NeuralNetwork {
         // Apply homeostatic regulation to maintain network stability
         self.apply_online_homeostatic_regulation(&activations);
 
-        // For backward compatibility, return (hidden, output)
+        // Return (output, hidden) - output is the final layer activations
         let output = activations.last().unwrap().clone();
         let hidden = if activations.len() > 2 {
             activations[1].clone()
@@ -351,7 +351,7 @@ impl NeuralNetwork {
             vec![]
         };
 
-        (hidden, output)
+        (output, hidden)
     }
 
     /// Forward propagation returning all layer activations (optimized for multi-core)

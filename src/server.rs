@@ -207,13 +207,44 @@ impl NetworkServer {
             return Ok(());
         }
 
-        // For now, just log the forwarding intent
-        // In a full implementation, you'd use the distributed network's send methods
+        // Send outputs to each configured endpoint using NNP protocol
         for endpoint in &self.config.output_endpoints {
-            info!("📤 Would forward {} outputs to {}", outputs.len(), endpoint);
+            info!("📤 Forwarding {} outputs to {} via NNP", outputs.len(), endpoint);
             debug!("   Outputs: {:?}", outputs);
+            
+            // Try to connect and send outputs via NNP protocol
+            if let Err(e) = self.send_outputs_via_nnp(endpoint, outputs).await {
+                warn!("⚠️ Failed to send outputs to {}: {:?}", endpoint, e);
+            } else {
+                info!("✅ Successfully sent outputs to {} via NNP", endpoint);
+            }
         }
 
+        Ok(())
+    }
+
+    /// Send outputs to a specific endpoint using NNP protocol
+    async fn send_outputs_via_nnp(&self, endpoint: &str, outputs: &[f64]) -> Result<(), ProtocolError> {
+        // Parse the endpoint address and port
+        let (address, port) = if endpoint.contains(':') {
+            let parts: Vec<&str> = endpoint.split(':').collect();
+            if parts.len() != 2 {
+                return Err(ProtocolError::InvalidPayload);
+            }
+            let port = parts[1].parse::<u16>()
+                .map_err(|_| ProtocolError::InvalidPayload)?;
+            (parts[0].to_string(), port)
+        } else {
+            (endpoint.to_string(), 8080) // Default NNP port
+        };
+        
+        // Connect to the endpoint and send via NNP
+        let peer_id = self.distributed_network.connect_to(&address, port).await?;
+        
+        // Send forward data using NNP protocol
+        // Layer 0 represents the output layer of this network
+        self.distributed_network.send_forward_data(peer_id, 0, outputs.to_vec()).await?;
+        
         Ok(())
     }
 }

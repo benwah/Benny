@@ -119,13 +119,17 @@ impl InputNode {
         
         // Try to send directly to a specific target if configured
         if let (Some(addr), Some(port)) = (&self.config.target_address, &self.config.target_port) {
+            println!("🔍 Looking for peer with address: {}:{}", addr, port);
             // Find the peer ID for the target neural network
             if let Some(peer_id) = self.distributed_network.find_peer_by_address(addr, *port) {
+                println!("✅ Found peer {} for {}:{}", peer_id, addr, port);
                 // Send data directly to the target peer, bypassing neural network processing
                 return self.distributed_network
                     .send_forward_data(peer_id, 0u8, data)
                     .await
                     .map_err(|e| IoError::NetworkError(format!("Failed to send data: {:?}", e)));
+            } else {
+                println!("❌ No peer found for {}:{}", addr, port);
             }
         }
         
