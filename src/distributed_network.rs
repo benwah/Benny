@@ -139,6 +139,24 @@ pub struct NetworkConnection {
     pub capabilities: u32,
     pub last_heartbeat: u64,
     pub sequence_counter: u64,
+    pub address: String,
+    pub port: u16,
+}
+
+impl Clone for NetworkConnection {
+    fn clone(&self) -> Self {
+        // Create a new connection without the TcpStream
+        // This is used only for reference purposes, not for actual communication
+        Self {
+            peer_id: self.peer_id,
+            stream: None, // Don't clone the stream
+            capabilities: self.capabilities,
+            last_heartbeat: self.last_heartbeat,
+            sequence_counter: self.sequence_counter,
+            address: self.address.clone(),
+            port: self.port,
+        }
+    }
 }
 
 /// Status of a network node
@@ -707,6 +725,8 @@ impl DistributedNetwork {
                                 .unwrap()
                                 .as_secs(),
                             sequence_counter: 0,
+                            address: "unknown".to_string(), // We don't have the address here
+                            port: 0, // We don't have the port here
                         };
 
                         {
@@ -796,6 +816,8 @@ impl DistributedNetwork {
                                 .unwrap()
                                 .as_secs(),
                             sequence_counter: 0,
+                            address: address.to_string(),
+                            port,
                         };
 
                         {
@@ -879,6 +901,22 @@ impl DistributedNetwork {
         }
 
         Ok(())
+    }
+    
+    /// Find a peer ID by address and port
+    pub fn find_peer_by_address(&self, address: &str, port: u16) -> Option<NetworkId> {
+        // Get a lock on the connections map
+        let connections = self.connections.lock().unwrap();
+        
+        // Iterate through all connections to find one matching the address and port
+        for (peer_id, connection) in connections.iter() {
+            if connection.address == address && connection.port == port {
+                return Some(*peer_id);
+            }
+        }
+        
+        // If no matching connection is found, return None
+        None
     }
 
     /// Process incoming network message
