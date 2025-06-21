@@ -25,6 +25,7 @@ pub struct IoNodeConfig {
     pub cert_path: Option<String>,
     pub key_path: Option<String>,
     pub data_transformation: Option<String>,
+    pub input_size: usize,
 }
 
 /// Errors that can occur during I/O operations
@@ -57,14 +58,17 @@ pub struct InputNode {
 impl InputNode {
     /// Create a new input node
     pub fn new(config: IoNodeConfig) -> (Self, mpsc::UnboundedReceiver<NetworkMessage>) {
-        // Create a dummy neural network for the distributed node
-        let dummy_network = NeuralNetwork::new(4, 2, 1, 0.1);
-
+        // Create a special "passthrough" neural network for input nodes
+        // Since we can't directly set weights, we'll use a minimal network
+        // and bypass it in the send_data method
+        let passthrough_network = NeuralNetwork::with_layers(&[config.input_size, config.input_size], 0.0);
+        
+        // Create a distributed network with the passthrough neural network
         let (distributed_network, message_receiver) = DistributedNetwork::new(
             config.name.clone(),
             config.listen_address.clone(),
             config.listen_port,
-            dummy_network,
+            passthrough_network,
         );
 
         let input_node = Self {
@@ -101,21 +105,40 @@ impl InputNode {
         Ok(())
     }
 
-    /// Send data to connected neural network nodes via NNP
+    /// Send data directly to connected neural network nodes via NNP
+    /// This is a special implementation for InputNode that bypasses the neural network
     pub async fn send_data(&self, data: Vec<f64>) -> Result<(), IoError> {
-        // Create forward data message using NNP protocol
+        // Verify input size matches the configured size
+        if data.len() != self.config.input_size {
+            return Err(IoError::TransformationError(format!(
+                "Input size mismatch: expected {}, got {}",
+                self.config.input_size,
+                data.len()
+            )));
+        }
+        
+        // Try to send directly to a specific target if configured
+        if let (Some(addr), Some(port)) = (&self.config.target_address, &self.config.target_port) {
+            // Find the peer ID for the target neural network
+            if let Some(peer_id) = self.distributed_network.find_peer_by_address(addr, *port) {
+                // Send data directly to the target peer, bypassing neural network processing
+                return self.distributed_network
+                    .send_forward_data(peer_id, 0u8, data)
+                    .await
+                    .map_err(|e| IoError::NetworkError(format!("Failed to send data: {:?}", e)));
+            }
+        }
+        
+        // If no specific target or target not found, broadcast to all connected networks
         let message = NetworkMessage {
             msg_type: MessageType::ForwardData,
             sequence: 0, // Will be set by send_message
             payload: MessagePayload::ForwardData {
-                layer_id: 0,
+                layer_id: 0, // Always use layer 0 for input data
                 data: data.iter().map(|&x| x as f32).collect(),
             },
         };
-
-        // Send to all connected neural network nodes
-        // Note: In the current implementation, we'd need to iterate through connections
-        // For now, we'll use the handle_message approach
+        
         self.distributed_network
             .handle_message(message)
             .await
@@ -123,6 +146,8 @@ impl InputNode {
 
         Ok(())
     }
+
+
 
     /// Connect to external data source and start forwarding via NNP
     pub async fn connect_external_source(
