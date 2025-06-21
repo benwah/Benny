@@ -24,7 +24,6 @@ Thumbs.db
 # Generated model files
 *.bin
 *.json
-*.toml
 *.csv
 
 # Neural network training data

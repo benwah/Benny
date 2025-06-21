@@ -142,6 +142,7 @@ impl InputServer {
                 use_tls: target.use_tls,
                 cert_path: self.config.cert_path.clone(),
                 key_path: self.config.key_path.clone(),
+		input_size: target.input_count.clone(),
                 data_transformation: None,
             };
 

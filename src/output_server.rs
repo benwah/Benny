@@ -796,7 +796,7 @@ class OutputMonitor {{
         // Force ws:// for development (since our WebSocket server doesn't support TLS)
         const protocol = 'ws:';
         // Use work-2 domain for WebSocket (port 12001 maps to work-2)
-        const wsUrl = `${{protocol}}//work-2-pkrixdgnelfootuc.prod-runtime.all-hands.dev`;
+        const wsUrl = `${{protocol}}//localhost:12001`;
         
         this.log(`Connecting to WebSocket: ${{wsUrl}}`);
         

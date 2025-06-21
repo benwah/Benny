@@ -1,0 +1,19 @@
+architecture = [16, 16]      # Layer sizes
+learning_rate = 0.01             # Backpropagation learning rate
+hebbian_mode = "Classic"         # Hebbian learning mode
+hebbian_rate = 0.05             # Hebbian learning rate
+anti_hebbian_rate = 0.0
+decay_rate = 0.005
+homeostatic_rate = 0.005
+target_activity = 0.2
+history_size = 20
+use_backprop = false
+backprop_rate = 0.0
+online_learning = true
+
+[training]
+batch_size = 0
+print_interval = 0
+early_stop_threshold = 0.0
+early_stop_patience = 0
+validation_split = 0.0

@@ -83,12 +83,7 @@ sudo docker logs <container-name>
 - **Documentation**: `/workspace/Benny/docker/topologies/README-custom-6node.md`
 
 ### Neural Network Configurations
-- **nn0**: `/workspace/Benny/docker/config/nn0.toml` (16 inputs)
-- **nn1**: `/workspace/Benny/docker/config/nn1.toml`
-- **nn2**: `/workspace/Benny/docker/config/nn2.toml`
-- **nn3**: `/workspace/Benny/docker/config/nn3.toml`
-- **nn4**: `/workspace/Benny/docker/config/nn4.toml`
-- **nn5**: `/workspace/Benny/docker/config/nn5.toml` (8 outputs)
+- **nn0-nn5**: `/workspace/Benny/docker/config/default.toml` (16 inputs)
 
 ## 📊 Features
 
