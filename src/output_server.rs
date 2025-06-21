@@ -11,6 +11,13 @@ use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 
+// Import NNP protocol components
+use crate::distributed_network::{MessageType, MessagePayload, NetworkMessage};
+use byteorder::{BigEndian, ByteOrder};
+use uuid::Uuid;
+
+// NNP Protocol constants
+const HEADER_SIZE: usize = 22; // 4 + 1 + 1 + 4 + 8 + 4
 
 /// Configuration for the OutputServer
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -151,68 +158,176 @@ impl OutputServer {
         }
     }
 
-    /// Handle a connection from a neural network
+    /// Handle a connection from a neural network using NNP protocol
     async fn handle_neural_network_connection(
         mut stream: TcpStream,
         network_id: String,
         websocket_clients: Arc<RwLock<Vec<mpsc::UnboundedSender<OutputWebSocketMessage>>>>,
         expected_output_size: usize,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        println!("📡 Started handling connection from: {}", network_id);
+        println!("📡 Started handling NNP connection from: {}", network_id);
         
-        let mut buffer = vec![0; 1024];
+        // Handle initial handshake
+        if let Err(e) = Self::handle_nnp_handshake(&mut stream, &network_id).await {
+            println!("❌ Handshake failed with {}: {:?}", network_id, e);
+            return Err(format!("Handshake failed: {:?}", e).into());
+        }
+        
+        // Send NetworkList to all WebSocket clients after successful handshake
+        let network_info = OutputNetworkInfo {
+            id: network_id.clone(),
+            name: "Main Neural Network".to_string(),
+            listen_address: "0.0.0.0".to_string(),
+            listen_port: 9000,
+            output_count: expected_output_size,
+            connected: true,
+            use_tls: false,
+        };
+        let network_list_msg = OutputWebSocketMessage::NetworkList { 
+            networks: vec![network_info] 
+        };
+        
+        let clients = websocket_clients.read().await;
+        for client in clients.iter() {
+            let _ = client.send(network_list_msg.clone());
+        }
+        drop(clients);
+        println!("📋 Sent NetworkList to {} WebSocket clients", websocket_clients.read().await.len());
         
         loop {
-            match stream.read(&mut buffer).await {
-                Ok(0) => {
+            match Self::read_nnp_message(&mut stream).await {
+                Ok(Some(message)) => {
+                    match message.payload {
+                        MessagePayload::ForwardData { layer_id: _, data } => {
+                            // Convert f32 data to f64 for consistency
+                            let outputs: Vec<f64> = data.iter().map(|&x| x as f64).collect();
+                            
+                            if outputs.len() == expected_output_size {
+                                let timestamp = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_millis() as u64;
+
+                                let output_message = OutputWebSocketMessage::OutputData {
+                                    network_id: network_id.clone(),
+                                    outputs: outputs.clone(),
+                                    timestamp,
+                                };
+
+                                // Broadcast to all connected WebSocket clients
+                                let clients = websocket_clients.read().await;
+                                println!("🔌 Broadcasting to {} WebSocket clients", clients.len());
+                                for (i, client) in clients.iter().enumerate() {
+                                    match client.send(output_message.clone()) {
+                                        Ok(_) => {
+                                            println!("✅ Sent to WebSocket client {}", i);
+                                            if let Ok(json_str) = serde_json::to_string(&output_message) {
+                                                println!("📤 WebSocket message: {}", json_str);
+                                            }
+                                        },
+                                        Err(e) => println!("❌ Failed to send to WebSocket client {}: {:?}", i, e),
+                                    }
+                                }
+
+                                println!("📊 Received output data from {} via NNP: {:?}", network_id, outputs);
+                            } else {
+                                println!("⚠️ Invalid output size from {}: expected {}, got {}", 
+                                    network_id, expected_output_size, outputs.len());
+                            }
+                        }
+                        MessagePayload::Handshake { .. } => {
+                            // Handshake already handled, ignore
+                        }
+                        _ => {
+                            println!("⚠️ Unexpected message type from {}: {:?}", network_id, message.msg_type);
+                        }
+                    }
+                }
+                Ok(None) => {
                     println!("🔌 Connection closed by {}", network_id);
                     break;
                 }
-                Ok(n) => {
-                    // Parse the received data as JSON
-                    let data_str = String::from_utf8_lossy(&buffer[..n]);
-                    
-                    // Try to parse as a simple JSON array of numbers
-                    if let Ok(outputs) = serde_json::from_str::<Vec<f64>>(&data_str.trim()) {
-                        if outputs.len() == expected_output_size {
-                            let timestamp = std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap()
-                                .as_millis() as u64;
-
-                            let output_message = OutputWebSocketMessage::OutputData {
-                                network_id: network_id.clone(),
-                                outputs: outputs.clone(),
-                                timestamp,
-                            };
-
-                            // Broadcast to all connected WebSocket clients
-                            let clients = websocket_clients.read().await;
-                            for client in clients.iter() {
-                                let _ = client.send(output_message.clone());
-                            }
-
-                            println!("📊 Received output data from {}: {:?}", network_id, outputs);
-                            
-                            // Send acknowledgment
-                            let ack = "OK\n";
-                            let _ = stream.write_all(ack.as_bytes()).await;
-                        } else {
-                            println!("⚠️ Invalid output size from {}: expected {}, got {}", 
-                                network_id, expected_output_size, outputs.len());
-                        }
-                    } else {
-                        println!("⚠️ Invalid data format from {}: {}", network_id, data_str);
-                    }
-                }
                 Err(e) => {
-                    println!("❌ Error reading from {}: {:?}", network_id, e);
+                    println!("❌ Error reading NNP message from {}: {:?}", network_id, e);
                     break;
                 }
             }
         }
         
         println!("📡 Connection handler for {} ended", network_id);
+        Ok(())
+    }
+
+    /// Handle NNP handshake
+    async fn handle_nnp_handshake(stream: &mut TcpStream, network_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+        // Wait for handshake message
+        match Self::read_nnp_message(stream).await {
+            Ok(Some(message)) => {
+                match message.payload {
+                    MessagePayload::Handshake { network_id: peer_id, name, layers, capabilities } => {
+                        println!("🤝 Received handshake from '{}' (ID: {})", name, peer_id);
+                        println!("   Layers: {:?}, Capabilities: 0x{:08X}", layers, capabilities);
+                        
+                        // Send handshake acknowledgment
+                        let ack_message = NetworkMessage {
+                            msg_type: MessageType::HandshakeAck,
+                            sequence: 1,
+                            payload: MessagePayload::HandshakeAck {
+                                network_id: Uuid::new_v4(), // Our ID
+                                accepted: true,
+                            },
+                        };
+                        
+                        if let Err(e) = Self::send_nnp_message(stream, ack_message).await {
+                            return Err(format!("Failed to send handshake ack: {:?}", e).into());
+                        }
+                        println!("📤 Sent handshake acknowledgment to {}", network_id);
+                        Ok(())
+                    }
+                    _ => {
+                        Err("Expected handshake message".into())
+                    }
+                }
+            }
+            Ok(None) => {
+                Err("No handshake message received".into())
+            }
+            Err(e) => {
+                Err(format!("Failed to read handshake: {:?}", e).into())
+            }
+        }
+    }
+
+    /// Read an NNP message from the stream
+    async fn read_nnp_message(stream: &mut TcpStream) -> Result<Option<NetworkMessage>, Box<dyn std::error::Error + Send + Sync>> {
+        // Read header first
+        let mut header = vec![0u8; HEADER_SIZE];
+        match stream.read_exact(&mut header).await {
+            Ok(_) => {},
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(None),
+            Err(e) => return Err(e.into()),
+        }
+
+        // Get payload length from header
+        let payload_length = BigEndian::read_u32(&header[6..10]) as usize;
+        
+        // Read the complete message (header + payload)
+        let mut full_message = vec![0u8; HEADER_SIZE + payload_length];
+        full_message[..HEADER_SIZE].copy_from_slice(&header);
+        stream.read_exact(&mut full_message[HEADER_SIZE..]).await?;
+
+        // Parse using the distributed network's method
+        match NetworkMessage::from_bytes(&full_message) {
+            Ok(message) => Ok(Some(message)),
+            Err(e) => Err(format!("Failed to parse NNP message: {:?}", e).into()),
+        }
+    }
+
+    /// Send an NNP message to the stream
+    async fn send_nnp_message(stream: &mut TcpStream, message: NetworkMessage) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // Use the distributed network's serialization method
+        let message_bytes = message.to_bytes();
+        stream.write_all(&message_bytes).await?;
         Ok(())
     }
 
@@ -253,7 +368,7 @@ impl OutputServer {
     async fn handle_websocket_connection(
         stream: TcpStream,
         addr: SocketAddr,
-        network_status: Arc<RwLock<HashMap<String, bool>>>,
+        _network_status: Arc<RwLock<HashMap<String, bool>>>,
         websocket_clients: Arc<RwLock<Vec<mpsc::UnboundedSender<OutputWebSocketMessage>>>>,
         config: OutputServerConfig,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -771,7 +886,7 @@ h2 {
     }
 
     /// Serve JavaScript
-    fn serve_js(_websocket_port: u16) -> Response<Body> {
+    fn serve_js(websocket_port: u16) -> Response<Body> {
         let js = format!(
             r#"
 class OutputMonitor {{
@@ -795,8 +910,8 @@ class OutputMonitor {{
     connectWebSocket() {{
         // Force ws:// for development (since our WebSocket server doesn't support TLS)
         const protocol = 'ws:';
-        // Use work-2 domain for WebSocket (port 12001 maps to work-2)
-        const wsUrl = `${{protocol}}//localhost:12001`;
+        // Use the actual WebSocket port
+        const wsUrl = `${{protocol}}//localhost:{}`;
         
         this.log(`Connecting to WebSocket: ${{wsUrl}}`);
         
@@ -812,10 +927,13 @@ class OutputMonitor {{
             
             this.ws.onmessage = (event) => {{
                 try {{
+                    console.log('WebSocket message received:', event.data);
                     const message = JSON.parse(event.data);
+                    console.log('Parsed message:', message);
                     this.handleMessage(message);
                 }} catch (e) {{
                     this.log(`Error parsing message: ${{e.message}}`);
+                    console.error('WebSocket message error:', e, 'Raw data:', event.data);
                 }}
             }};
             
@@ -850,11 +968,14 @@ class OutputMonitor {{
     }}
 
     handleMessage(message) {{
+        console.log('Handling message type:', message.type);
         switch (message.type) {{
             case 'NetworkList':
+                console.log('Processing NetworkList:', message.networks);
                 this.updateNetworkList(message.networks);
                 break;
             case 'OutputData':
+                console.log('Processing OutputData:', message.network_id, message.outputs, message.timestamp);
                 this.updateOutputData(message.network_id, message.outputs, message.timestamp);
                 break;
             case 'StatusUpdate':
@@ -878,11 +999,17 @@ class OutputMonitor {{
     }}
 
     updateOutputData(networkId, outputs, timestamp) {{
+        console.log('updateOutputData called with:', networkId, outputs, timestamp);
+        console.log('Current networks:', this.networks);
+        console.log('Current outputData before update:', this.outputData);
+        
         this.outputData.set(networkId, {{
             outputs: outputs,
             timestamp: timestamp,
             lastUpdate: new Date()
         }});
+        
+        console.log('Current outputData after update:', this.outputData);
         
         this.updateOutputVisualization(networkId);
         this.log(`Received output data from ${{this.networks.get(networkId)?.name || networkId}}: [${{outputs.map(v => v.toFixed(3)).join(', ')}}]`);
@@ -978,10 +1105,17 @@ class OutputMonitor {{
     }}
 
     updateOutputVisualization(networkId) {{
+        console.log('updateOutputVisualization called for:', networkId);
         const data = this.outputData.get(networkId);
         const network = this.networks.get(networkId);
         
-        if (!data || !network) return;
+        console.log('Data found:', data);
+        console.log('Network found:', network);
+        
+        if (!data || !network) {{
+            console.log('Missing data or network, returning early');
+            return;
+        }}
         
         // Update timestamp
         const timestampElement = document.getElementById(`timestamp-${{networkId}}`);
@@ -1054,7 +1188,8 @@ let outputMonitor;
 document.addEventListener('DOMContentLoaded', () => {{
     outputMonitor = new OutputMonitor();
 }});
-"#
+"#,
+            websocket_port
         );
 
         Response::builder()

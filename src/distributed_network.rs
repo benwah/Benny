@@ -407,7 +407,7 @@ impl MessagePayload {
                 }
 
                 let network_id =
-                    Uuid::from_bytes_le(bytes[offset..offset + 16].try_into().unwrap());
+                    Uuid::from_bytes(bytes[offset..offset + 16].try_into().unwrap());
                 offset += 16;
 
                 let name_len = bytes[offset] as usize;
@@ -471,7 +471,7 @@ impl MessagePayload {
                 if bytes.len() != 17 {
                     return Err(ProtocolError::InvalidPayload);
                 }
-                let network_id = Uuid::from_bytes_le(bytes[0..16].try_into().unwrap());
+                let network_id = Uuid::from_bytes(bytes[0..16].try_into().unwrap());
                 let accepted = bytes[16] != 0;
                 Ok(MessagePayload::HandshakeAck {
                     network_id,
@@ -554,6 +554,7 @@ pub enum ProtocolError {
     ChecksumMismatch,
     InvalidPayload,
     UnsupportedMessageType,
+    PeerNotFound,
     IoError(std::io::Error),
 }
 
@@ -887,26 +888,82 @@ impl DistributedNetwork {
         peer_id: NetworkId,
         message: NetworkMessage,
     ) -> Result<(), ProtocolError> {
-        let _message_bytes = message.to_bytes();
+        let message_bytes = message.to_bytes();
 
-        // For now, we'll need to establish a new connection for each message
+        // Get connection info for the peer
+        let (address, port) = {
+            let connections = self.connections.lock().unwrap();
+            if let Some(connection) = connections.get(&peer_id) {
+                (connection.address.clone(), connection.port)
+            } else {
+                return Err(ProtocolError::PeerNotFound);
+            }
+        };
+
+        // Establish a new connection and send the message
         // In a production system, you'd maintain persistent connections
-        let connections = self.connections.lock().unwrap();
-        if let Some(_connection) = connections.get(&peer_id) {
-            // TODO: Use persistent connection
-            println!(
-                "📤 Would send {:?} message to {}",
-                message.msg_type, peer_id
-            );
+        match TcpStream::connect(format!("{}:{}", address, port)).await {
+            Ok(mut stream) => {
+                println!("📤 Sending {:?} message to {} ({}:{})", message.msg_type, peer_id, address, port);
+                
+                // First, send a handshake to establish the connection
+                let handshake = NetworkMessage {
+                    msg_type: MessageType::Handshake,
+                    sequence: self.next_sequence(),
+                    payload: MessagePayload::Handshake {
+                        network_id: self.id,
+                        name: self.info.name.clone(),
+                        layers: self.info.layers.clone(),
+                        capabilities: self.info.capabilities,
+                    },
+                };
+                
+                let handshake_bytes = handshake.to_bytes();
+                if let Err(e) = stream.write_all(&handshake_bytes).await {
+                    return Err(ProtocolError::IoError(e));
+                }
+                
+                // Read handshake acknowledgment
+                let mut ack_buffer = vec![0u8; 1024];
+                match stream.read(&mut ack_buffer).await {
+                    Ok(bytes_read) if bytes_read > 0 => {
+                        // Parse the acknowledgment (we'll assume it's valid for now)
+                        println!("🤝 Received handshake acknowledgment");
+                    }
+                    Ok(_) => {
+                        println!("⚠️ Empty handshake acknowledgment");
+                    }
+                    Err(e) => {
+                        println!("❌ Failed to read handshake acknowledgment: {}", e);
+                        return Err(ProtocolError::IoError(e));
+                    }
+                }
+                
+                // Now send the actual message
+                if let Err(e) = stream.write_all(&message_bytes).await {
+                    return Err(ProtocolError::IoError(e));
+                }
+                
+                println!("✅ Successfully sent {:?} message to {}", message.msg_type, peer_id);
+                Ok(())
+            }
+            Err(e) => {
+                println!("❌ Failed to connect to peer {} ({}:{}): {}", peer_id, address, port, e);
+                Err(ProtocolError::IoError(e))
+            }
         }
-
-        Ok(())
     }
     
     /// Find a peer ID by address and port
     pub fn find_peer_by_address(&self, address: &str, port: u16) -> Option<NetworkId> {
         // Get a lock on the connections map
         let connections = self.connections.lock().unwrap();
+        
+        println!("🔍 Searching for peer {}:{}", address, port);
+        println!("📋 Available connections:");
+        for (peer_id, connection) in connections.iter() {
+            println!("   - {} -> {}:{}", peer_id, connection.address, connection.port);
+        }
         
         // Iterate through all connections to find one matching the address and port
         for (peer_id, connection) in connections.iter() {
